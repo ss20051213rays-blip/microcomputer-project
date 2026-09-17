@@ -1,4 +1,0 @@
-# Offline mock project is stdlib-only on purpose.
-# No third-party packages are required to run demo/tests on Mac.
-# Later hardware bring-up on Raspberry Pi may add:
-# numpy, sounddevice, opencv-python, picamera2, gpiozero, PyYAML
