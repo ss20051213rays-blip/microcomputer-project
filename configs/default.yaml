@@ -1,0 +1,77 @@
+# 视听融合声源定位与目标跟踪云台 · 默认配置
+# 所有可调参数统一在此文件管理，源码中不硬编码阈值 / 限位 / 步长
+# 修改后需记录到项目日志，并说明改动原因和测试结果
+
+# ── 配置元数据 ──────────────────────────────────────────────────────────────
+config_version: "0.1.0"          # 每次参数变化递增，用于日志追溯
+
+# ── 音频参数（M3）──────────────────────────────────────────────────────────
+audio:
+  device_name: ""                 # 留空则 sounddevice 自动选择；可填设备名或稳定 ID
+  sample_rate: 16000              # Hz，必须与麦克风实际支持率一致
+  channels: 2                     # 双通道，左通道 ch0，右通道 ch1
+  dtype: "int16"
+
+  # 采集块（回调不做 FFT，只复制 PCM）
+  blocksize: 1024                 # 采样点数，约 64 ms @ 16 kHz
+
+  # 声音事件检测（SED）
+  energy_threshold: 0.05          # RMS 阈值（归一化 0–1），需根据实测环境调整
+  min_event_gap_ms: 300           # 锁存时间（ms），防止余振重复触发
+  pre_roll_ms: 50                 # 触发前预滚窗口（ms），用于 GCC-PHAT 捕获起始
+
+  # GCC-PHAT 定位
+  mic_spacing_m: 0.065            # 麦克风间距（m），实测后修正
+  sound_speed_mps: 343.0          # 声速（m/s）
+  audio_zero_deg: 0.0             # 声学零点偏置（°），实测后修正
+  gcc_confidence_threshold: 0.3   # 低于此值切换能量差降级模式
+  fallback_angle_deg: 30.0        # 侧别降级时的固定转角（°）
+
+# ── 相机参数（M4）──────────────────────────────────────────────────────────
+camera:
+  backend: "picamera2"            # "picamera2" | "opencv"（保底）
+  device_index: 0                 # OpenCV 保底时的设备编号
+  width: 320
+  height: 240
+  detect_fps: 15                  # 目标检测帧率上限
+  camera_cx: 160                  # 图像中心列（= width / 2，需实测修正）
+
+  # 人脸检测
+  detector: "mediapipe"           # "mediapipe" | "haar"（保底）
+  haar_cascade: "haarcascade_frontalface_default.xml"
+  min_detection_confidence: 0.5   # MediaPipe 最低置信度
+  observation_timeout_s: 0.3      # 观测超过此时间不再使用（防旧帧控制）
+
+# ── 舵机参数（M2）──────────────────────────────────────────────────────────
+servo:
+  servo_gpio: 18                  # 树莓派硬件 PWM 引脚（BCM 编号），默认 GPIO 18
+  pulse_min_us: 500               # 最小脉宽（µs），实测后修正（勿假定 1000）
+  pulse_max_us: 2500              # 最大脉宽（µs），实测后修正（勿假定 2000）
+  servo_mid: 1500                 # 中位脉宽（µs），实测后修正（勿假定 1500）
+  min_angle: -90.0                # 软件限位：最小角度（°）
+  max_angle: 90.0                 # 软件限位：最大角度（°）
+  servo_sign: 1                   # 方向符号：1 = 正常，-1 = 硬件方向相反时修改此值
+  step_deg: 2.0                   # 每次步进量（°）
+  deadzone_px: 30                 # 视觉死区（像素），小于此值不动
+
+# ── 控制逻辑参数（M5）─────────────────────────────────────────────────────
+control:
+  turn_timeout_s: 1.5             # TURN_ONCE 超时（s），超时后强制进入 FOLLOW
+  lost_timeout_s: 3.0             # FOLLOW 无脸超时（s），超时后回中并回 IDLE
+  follow_interval_ms: 50          # 视觉跟随控制周期（ms），约 20 Hz
+  main_loop_hz: 30                # 主循环频率（Hz）
+
+# ── 日志参数（M0）──────────────────────────────────────────────────────────
+logging:
+  level: "INFO"                   # DEBUG | INFO | WARNING | ERROR
+  log_to_file: true
+  log_dir: "logs"                 # 日志目录（相对项目根）
+  log_fields:                     # 结构化日志字段
+    - timestamp_mono
+    - state
+    - theta_audio
+    - dx
+    - theta_cmd
+    - fps
+    - event
+
