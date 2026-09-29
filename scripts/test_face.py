@@ -18,7 +18,7 @@ def main():
     parser.add_argument("--seconds", type=float, default=15.0, help="测试时长")
     args = parser.parse_args()
 
-    config = load_config("configs/default.yaml")
+    config = load_config(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "configs", "default.yaml")))
     logger = setup_logger(config)
     
     print("=== 人脸检测性能测试 ===")

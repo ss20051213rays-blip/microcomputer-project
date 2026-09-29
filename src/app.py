@@ -5,7 +5,7 @@ from src.config import load_config, setup_logger
 
 def main():
     parser = argparse.ArgumentParser(description="视听融合声源定位与目标跟踪云台")
-    parser.add_argument("--config", default="configs/default.yaml", help="配置文件路径")
+    parser.add_argument("--config", default=__import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__file__), "..", "configs", "default.yaml")), help="配置文件路径")
     parser.add_argument("--dry-run", action="store_true", help="无硬件干运行模式")
     args = parser.parse_args()
 

@@ -11,7 +11,7 @@ def main():
     parser = argparse.ArgumentParser(description="声音事件检测 (SED) 阈值调试工具")
     args = parser.parse_args()
 
-    config = load_config("configs/default.yaml")
+    config = load_config(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "configs", "default.yaml")))
     # 为了清晰查看日志，我们配置 logger
     logger = setup_logger(config)
     

@@ -24,7 +24,7 @@ def main():
         print(sd.query_devices())
         sys.exit(0)
         
-    config = load_config("configs/default.yaml")['audio']
+    config = load_config(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "configs", "default.yaml")))['audio']
     fs = config['sample_rate']
     channels = config['channels']
     

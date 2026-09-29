@@ -11,7 +11,7 @@ def main():
     parser = argparse.ArgumentParser(description="GCC-PHAT 角度估计精准度测试工具")
     args = parser.parse_args()
 
-    config = load_config("configs/default.yaml")
+    config = load_config(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "configs", "default.yaml")))
     logger = setup_logger(config)
     
     print("=== GCC-PHAT 方位角测试 ===")

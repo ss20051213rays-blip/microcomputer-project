@@ -19,7 +19,7 @@ def main():
     parser.add_argument("--seconds", type=float, default=10.0, help="测试运行时长 (秒)")
     args = parser.parse_args()
 
-    config = load_config("configs/default.yaml")
+    config = load_config(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "configs", "default.yaml")))
     logger = setup_logger(config)
     
     cam = CameraCapture(config['camera'])
