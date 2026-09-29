@@ -44,7 +44,10 @@ def stress_test(servo):
         time.sleep(0.5)
 
 def main():
-    config = load_config("configs/default.yaml")
+    # 获取项目根目录，拼出配置文件的绝对路径，防止在不同目录下运行找不到文件
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    config_path = os.path.join(base_dir, "configs", "default.yaml")
+    config = load_config(config_path)
     logger = setup_logger(config)
     
     dry_run = "--dry-run" in sys.argv
