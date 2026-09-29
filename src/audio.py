@@ -163,8 +163,23 @@ class AudioPipeline:
         max_shift = int(max_tau * self.fs) + 1
         cc_shifted = np.concatenate((cc[-max_shift:], cc[:max_shift+1]))
         
-        shift = np.argmax(cc_shifted) - max_shift
-        confidence = float(cc_shifted[shift + max_shift])
+        peak_idx = int(np.argmax(cc_shifted))
+        confidence = float(cc_shifted[peak_idx])
+        
+        # 抛物线亚采样插值：短基线阵列的最大时延只有几个采样点，
+        # 直接用整数 argmax 会把角度量化成台阶（16kHz/6.5cm 下 30° 附近一步跨约 10°）。
+        # 用峰值及其左右邻居拟合抛物线，恢复出亚采样精度的时延。
+        sub_offset = 0.0
+        if 0 < peak_idx < len(cc_shifted) - 1:
+            y_prev = cc_shifted[peak_idx - 1]
+            y_peak = cc_shifted[peak_idx]
+            y_next = cc_shifted[peak_idx + 1]
+            denom = y_prev - 2.0 * y_peak + y_next
+            if abs(denom) > 1e-12:
+                sub_offset = 0.5 * (y_prev - y_next) / denom
+                sub_offset = float(np.clip(sub_offset, -0.5, 0.5))
+        
+        shift = (peak_idx - max_shift) + sub_offset
         
         # --- 降级模式检查 ---
         if confidence < self.gcc_conf_thresh:
