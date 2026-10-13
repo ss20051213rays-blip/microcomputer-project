@@ -1,0 +1,95 @@
+import sys
+import os
+import time
+
+# 将项目根目录加入 import 路径
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from src.config import load_config, setup_logger
+from src.servo import ServoController
+
+def basic_test(servo):
+    print("\n[基础测试] 正在执行: 中位(0°) -> 左转(-30°) -> 右转(+30°) -> 回中(0°)")
+    try:
+        time.sleep(0.5)
+        servo.center()
+        time.sleep(1)
+        servo.set_angle(-30.0)
+        time.sleep(1)
+        servo.set_angle(30.0)
+        time.sleep(1)
+        servo.center()
+        print("[基础测试] 动作完成！请确认舵机是否顺畅执行了指令。")
+    except KeyboardInterrupt:
+        print("\n[基础测试] 中断，回中。")
+        servo.center()
+
+def stress_test(servo):
+    print("\n[压力测试] 开始连续往复扫掠 (-30° 到 +30°)...")
+    print("⚠️  提示：随时按下键盘组合键 【Ctrl + C】 即可安全暂停并返回主菜单！")
+    try:
+        servo.center()
+        time.sleep(1.0)
+        count = 1
+        while True:
+            print(f" -> 扫掠第 {count} 轮...")
+            servo.set_angle(-30.0)
+            time.sleep(0.8)
+            servo.set_angle(30.0)
+            time.sleep(0.8)
+            count += 1
+    except KeyboardInterrupt:
+        print("\n[压力测试] 收到暂停指令！正在停止并让舵机回中...")
+        servo.center()
+        time.sleep(0.5)
+
+def main():
+    # 获取项目根目录，拼出配置文件的绝对路径，防止在不同目录下运行找不到文件
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    config_path = os.path.join(base_dir, "configs", "default.yaml")
+    config = load_config(config_path)
+    logger = setup_logger(config)
+    
+    dry_run = "--dry-run" in sys.argv
+    
+    try:
+        servo = ServoController(config['servo'], dry_run=dry_run)
+    except Exception as e:
+        print(f"初始化舵机失败: {e}")
+        sys.exit(1)
+        
+    try:
+        servo.center()
+        while True:
+            print("\n" + "="*35)
+            print("=== 🎯 舵机性能与压力测试工具 ===")
+            print("  1. 基础转动测试 (单次测试连通性与方向)")
+            print("  2. 连续压力测试 (验证带载能力，按Ctrl+C随时暂停)")
+            print("  3. 自由输入角度 (测试死角与软件限位)")
+            print("  q. 安全退出并关闭 PWM")
+            print("="*35)
+            
+            cmd = input("请选择模式 (1/2/3/q): ").strip().lower()
+            
+            if cmd == 'q':
+                break
+            elif cmd == '1':
+                basic_test(servo)
+            elif cmd == '2':
+                stress_test(servo)
+            elif cmd == '3':
+                val_str = input("请输入目标角度 (例如 0, 30, -45): ")
+                try:
+                    val = float(val_str)
+                    servo.set_angle(val)
+                except ValueError:
+                    print("输入无效！")
+            else:
+                print("未知指令，请重新输入。")
+    except KeyboardInterrupt:
+        print("\n用户强制退出。")
+    finally:
+        servo.disable()
+
+if __name__ == "__main__":
+    main()
