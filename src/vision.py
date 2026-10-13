@@ -190,3 +190,87 @@ class FaceDetector:
     def close(self):
         if self.face_detection:
             self.face_detection.close()
+
+class VisionPipeline:
+    """
+    视觉综合管线 (阶段四/五)
+    管理相机后台取流线程与人脸检测，提供最新单帧观测 (VisionObservation)。
+    支持 dry_run 模式以供脱机状态机模拟。
+    """
+    def __init__(self, config_camera, dry_run=False):
+        self.config = config_camera
+        self.dry_run = dry_run
+        self.fps = self.config.get("detect_fps", 15)
+        
+        self.capture = None
+        self.detector = None
+        self.running = False
+        self.thread = None
+        self.lock = threading.Lock()
+        self.latest_obs = None
+        self._mock_obs = None
+        self.last_heartbeat = time.monotonic()
+        
+    def set_mock_observation(self, obs: VisionObservation):
+        """用于脱机测试注入模拟视觉结果"""
+        with self.lock:
+            self._mock_obs = obs
+            
+    def start(self):
+        if self.dry_run:
+            logger.info("视觉管线 (M4) 处于 DRY-RUN 模式。")
+            self.running = True
+            return True
+            
+        self.capture = CameraCapture(self.config)
+        if not self.capture.start():
+            logger.error("启动 CameraCapture 失败。")
+            return False
+            
+        self.detector = FaceDetector(self.config)
+        self.running = True
+        self.thread = threading.Thread(target=self._loop, daemon=True)
+        self.thread.start()
+        logger.info("视觉管线 (M4) 已启动。")
+        return True
+        
+    def _loop(self):
+        while self.running:
+            self.last_heartbeat = time.monotonic()
+            frame = self.capture.get_latest_frame()
+            if frame is not None:
+                obs = self.detector.process_frame(frame)
+                with self.lock:
+                    self.latest_obs = obs
+            else:
+                with self.lock:
+                    if self.latest_obs is None:
+                        self.latest_obs = VisionObservation(
+                            timestamp_mono=time.monotonic(),
+                            face_found=False,
+                            dx_px=0.0,
+                            bbox=(0, 0, 0, 0),
+                            confidence=0.0,
+                            fps=0.0
+                        )
+            time.sleep(1.0 / (self.fps * 1.5))
+            
+    def get_latest_observation(self) -> VisionObservation:
+        with self.lock:
+            if self._mock_obs is not None:
+                return self._mock_obs
+            return self.latest_obs
+            
+    def stop(self):
+        self.running = False
+        if self.thread:
+            self.thread.join(timeout=1.0)
+            self.thread = None
+        if self.capture:
+            self.capture.stop()
+            self.capture = None
+        if self.detector:
+            self.detector.close()
+            self.detector = None
+        logger.info("视觉管线已停止。")
+

@@ -34,15 +34,23 @@ class ServoController:
             logger.info(f"Servo initialized on GPIO {self.gpio}.")
             
     def _angle_to_pulse(self, angle):
-        """将物理角度映射到 PWM 脉宽，带方向符号处理"""
+        """将物理角度映射到 PWM 脉宽，带方向符号处理，且 0° 严格锚定 servo_mid"""
         # 应用方向符号
         physical_angle = angle * self.sign
         
-        angle_range = self.max_angle - self.min_angle
-        pulse_range = self.pulse_max - self.pulse_min
-        
-        ratio = (physical_angle - self.min_angle) / angle_range
-        pulse = self.pulse_min + ratio * pulse_range
+        # 基于 servo_mid 的分段线性映射：确保 0° 绝对对准校准的 servo_mid 脉宽
+        if physical_angle >= 0:
+            if self.max_angle > 0:
+                ratio = physical_angle / self.max_angle
+                pulse = self.servo_mid + ratio * (self.pulse_max - self.servo_mid)
+            else:
+                pulse = self.servo_mid
+        else:
+            if self.min_angle < 0:
+                ratio = physical_angle / self.min_angle  # 负负得正，比值在 [0, 1]
+                pulse = self.servo_mid + ratio * (self.pulse_min - self.servo_mid)
+            else:
+                pulse = self.servo_mid
         
         # 绝对安全限位裁剪
         pulse = max(self.pulse_min, min(self.pulse_max, pulse))

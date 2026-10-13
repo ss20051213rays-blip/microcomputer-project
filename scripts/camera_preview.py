@@ -39,7 +39,7 @@ def main():
         # 保存一张样本图测试方向
         frame = cam.get_latest_frame()
         if frame is not None:
-            out_path = "data/test_frame.jpg"
+            out_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "test_frame.jpg"))
             os.makedirs(os.path.dirname(out_path), exist_ok=True)
             cv2.imwrite(out_path, frame)
             print(f"[+] 成功保存测试样图至: {out_path}，请核实方向是否颠倒。")
