@@ -61,6 +61,20 @@ control:
   follow_interval_ms: 50          # 视觉跟随控制周期（ms），约 20 Hz
   main_loop_hz: 30                # 主循环频率（Hz）
 
+# ── 音响与语音播报参数（M7 拓展）─────────────────────────────────────────
+speaker:
+  enabled: true                   # 是否启用语音播报
+  audio_file: "assets/audio/locked.wav" # 视觉锁定提示音路径
+  lock_min_frames: 2              # 连续稳定检测到人脸多少帧视为稳定锁定并触发播报
+
+# ── 屏幕显示与实况 HUD 参数（M7 拓展）──────────────────────────────────────
+display:
+  enabled: true                   # 是否在屏幕上弹出实时画面窗口（无头模式可设为 false）
+  window_name: "Pan-Tilt Visual Tracking"
+  show_hud: true                  # 是否在图像上绘制锁定框、十字准星与状态文字
+  window_width: 640               # 显示窗口宽度（等比拉伸以便大屏查看）
+  window_height: 480              # 显示窗口高度
+
 # ── 日志参数（M0）──────────────────────────────────────────────────────────
 logging:
   level: "INFO"                   # DEBUG | INFO | WARNING | ERROR
@@ -74,4 +88,5 @@ logging:
     - theta_cmd
     - fps
     - event
+
 
