@@ -29,7 +29,7 @@ audio:
 
 # ── 相机参数（M4）──────────────────────────────────────────────────────────
 camera:
-  backend: "picamera2"            # "picamera2" | "opencv"（保底）
+  backend: "opencv"               # 当前 CameraCapture 使用 cv2.VideoCapture；Picamera2 适配尚未实现
   device_index: 0                 # OpenCV 保底时的设备编号
   width: 320
   height: 240
@@ -63,13 +63,13 @@ control:
 
 # ── 音响与语音播报参数（M7 拓展）─────────────────────────────────────────
 speaker:
-  enabled: true                   # 是否启用语音播报
+  enabled: false                  # M7 尚未实现；模块落地并完成验证后再启用
   audio_file: "assets/audio/locked.wav" # 视觉锁定提示音路径
   lock_min_frames: 2              # 连续稳定检测到人脸多少帧视为稳定锁定并触发播报
 
 # ── 屏幕显示与实况 HUD 参数（M7 拓展）──────────────────────────────────────
 display:
-  enabled: true                   # 是否在屏幕上弹出实时画面窗口（无头模式可设为 false）
+  enabled: false                  # M7 尚未实现；模块落地并完成验证后再启用
   window_name: "Pan-Tilt Visual Tracking"
   show_hud: true                  # 是否在图像上绘制锁定框、十字准星与状态文字
   window_width: 640               # 显示窗口宽度（等比拉伸以便大屏查看）
