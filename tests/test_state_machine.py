@@ -1,9 +1,9 @@
 import os
 import sys
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from src.config import load_config, setup_logger
-from src.app import run_simulation_test
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
+from pantilt.core.config import load_config, setup_logger
+from pantilt.app import run_simulation_test
 
 def main():
     config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "configs", "default.yaml"))

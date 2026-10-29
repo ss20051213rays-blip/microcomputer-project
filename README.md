@@ -4,7 +4,7 @@
 
 系统主线架构为：**2-DOF 串行总线舵机云台（Yaw+Pitch） + 微雪通用型 Bus Servo Adapter 驱动板 + 酷态科 6A 快充独立供电 + OV9281 120fps 全局快门相机 + ArUco 工业靶标 (DICT_4X4_50) / 人脸双模检测 + 50mW 物理激光瞄准指示 + 三态状态机调度**。
 
-完整技术开发计划见[开发计划](视听融合声源定位与目标跟踪云台-开发计划.md)，需要现场物理接线与实机验证的事项见[人工待办与硬件验证](人工待办与硬件验证.md)，全部历史变更与测试证据见[项目日志](项目日志.md)。
+完整技术开发计划见[开发计划](docs/视听融合声源定位与目标跟踪云台-开发计划.md)，需要现场物理接线与实机验证的事项见[人工待办与硬件验证](docs/人工待办与硬件验证.md)，全部历史变更与测试证据见[项目日志](docs/项目日志.md)。
 
 ---
 
@@ -29,12 +29,12 @@
 
 | 模块 | 状态 | 核心代码与测试支撑 |
 | :--- | :--- | :--- |
-| **M0 配置与入口** | ✅ 已实现 | `src/config.py`，支持 ruamel / PyYAML 兼容加载；`configs/default.yaml` (v0.2.0) |
+| **M0 配置与入口** | ✅ 已实现 | `src/pantilt/core/config.py`，支持 ruamel / PyYAML 兼容加载；`configs/default.yaml` (v0.2.0) |
 | **M1 动力与供电** | ✅ 接线方案就绪 | 酷态科 6A 快充 + 诱骗线直连微雪驱动板 VIN，树莓派逻辑供电完全物理隔离 |
-| **M2 总线舵机** | ✅ 已重构并通过脱机验证 | `src/servo.py` 原生支持微雪串行总线双轴（Yaw+Pitch）驱动与旧版 PWM 兼容回退 |
+| **M2 总线舵机** | ✅ 已重构并通过脱机验证 | `src/pantilt/actuation/servo.py` 原生支持微雪串行总线双轴（Yaw+Pitch）驱动与旧版 PWM 兼容回退 |
 | **M3 硬件双麦** | ⏳ 驱动与实测待办 | 已实现 SED 能量检测与 GCC-PHAT 亚采样插值；WM8960 实机加载待现场测试 |
-| **M4 视觉前端** | ✅ 已重构并通过合成验证 | `src/vision.py` 支持 ArUco 靶标与人脸双模，输出双轴偏差 $(dx, dy)$ |
-| **M5 控制与状态机**| ✅ 已重构并通过脱机闭环 | `src/controller.py` 两轴死区控制 + 50mW 激光器安全联锁；`scripts/test_2dof_fsm.py` 100% PASS |
+| **M4 视觉前端** | ✅ 已重构并通过合成验证 | `src/pantilt/perception/vision.py` 支持 ArUco 靶标与人脸双模，输出双轴偏差 $(dx, dy)$ |
+| **M5 控制与状态机**| ✅ 已重构并通过脱机闭环 | `src/pantilt/domain/controller.py` 两轴死区控制 + 50mW 激光器安全联锁；`tests/test_2dof_loop.py` 100% PASS |
 | **M6 异构协作** | ⏳ 增强设计已冻结 | 优先打通树莓派 USB 直连微雪驱动板，ESP32 协处理器作为实时增强 |
 | **M7 交互多媒体** | ⏳ 设计就绪 | 拓展坞已到位，支持 HDMI 屏幕 HUD 仪表盘与“目标已锁定”语音播报 |
 
@@ -94,32 +94,32 @@ OV9281 相机 (120fps 全局快门) -> CameraCapture 最新帧 -> ArUco / 人脸
 
 ```bash
 # 1. 死区两轴步进逻辑模拟测试
-python scripts/test_follow_logic.py
+python tests/test_controller.py
 
 # 2. 状态机三态 FSM 脱机确定性验收
-python scripts/test_fsm.py
+python tests/test_state_machine.py
 
 # 3. 二维总线云台与激光指示联动脱机闭环测试 (2-DOF)
-python scripts/test_2dof_fsm.py
+python tests/test_2dof_loop.py
 
 # 4. ArUco 工业靶标算法自检 (DICT_4X4_50, ID: 10~17)
-python scripts/test_aruco.py --dry-run
+python scripts/hw/aruco_probe.py --dry-run
 
 # 5. 微雪总线舵机扫掠脱机模拟
-python scripts/test_bus_servo.py --dry-run --sweep
+python scripts/hw/bus_servo_probe.py --dry-run --sweep
 ```
 
 ### 2. 真机单模块独立调试命令
 
 | 目标 | 执行命令 | 预期效果与验收重点 |
 | :--- | :--- | :--- |
-| **健康与温度检查** | `python scripts/healthcheck.py` | 验证 CPU 温度 ≤45°C，无欠压与降频标志 |
-| **微雪总线舵机调试** | `python scripts/test_bus_servo.py` | 交互式菜单：两轴归中、水平扫掠、垂直扫掠与角度回读 |
-| **总线双轴自动扫掠** | `python scripts/test_bus_servo.py --sweep` | 连续执行 5 轮平滑往复运动，验证供电与机械限位 |
-| **WM8960 双声道录音** | `python scripts/record_audio.py -d 5` | 保存 5 秒 WAV，检查左右通道独立响应与高信噪比 |
-| **OV9281 相机高帧率取流**| `python scripts/camera_preview.py --seconds 10`| 实测取流平均帧率达到 90~120 FPS，全局快门无果冻 |
-| **ArUco 靶标实时识别** | `python scripts/test_aruco.py --camera` | 实时计算 12cm 靶板的中心偏差 $(dx, dy)$，时延 ≤5ms |
-| **全系统实机端到端运行** | `python -m src.app --config configs/default.yaml` | 拍手转向 -> 视觉双轴对准 -> 激光点亮命中靶心 -> 超时回中 |
+| **健康与温度检查** | `python scripts/hw/healthcheck.py` | 验证 CPU 温度 ≤45°C，无欠压与降频标志 |
+| **微雪总线舵机调试** | `python scripts/hw/bus_servo_probe.py` | 交互式菜单：两轴归中、水平扫掠、垂直扫掠与角度回读 |
+| **总线双轴自动扫掠** | `python scripts/hw/bus_servo_probe.py --sweep` | 连续执行 5 轮平滑往复运动，验证供电与机械限位 |
+| **WM8960 双声道录音** | `python scripts/hw/record_audio.py -d 5` | 保存 5 秒 WAV，检查左右通道独立响应与高信噪比 |
+| **OV9281 相机高帧率取流**| `python scripts/hw/camera_preview.py --seconds 10`| 实测取流平均帧率达到 90~120 FPS，全局快门无果冻 |
+| **ArUco 靶标实时识别** | `python scripts/hw/aruco_probe.py --camera` | 实时计算 12cm 靶板的中心偏差 $(dx, dy)$，时延 ≤5ms |
+| **全系统实机端到端运行** | `python -m pantilt --config configs/default.yaml` | 拍手转向 -> 视觉双轴对准 -> 激光点亮命中靶心 -> 超时回中 |
 
 ---
 

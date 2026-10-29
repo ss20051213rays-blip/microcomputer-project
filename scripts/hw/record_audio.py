@@ -10,8 +10,8 @@ except ImportError:
     sys.exit(1)
 
 # 加入项目根目录
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from src.config import load_config
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'src')))
+from pantilt.core.config import load_config
 
 def main():
     parser = argparse.ArgumentParser(description="双麦克风阵列录音测试")
@@ -24,7 +24,7 @@ def main():
         print(sd.query_devices())
         sys.exit(0)
         
-    config = load_config(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "configs", "default.yaml")))['audio']
+    config = load_config(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', "configs", "default.yaml")))['audio']
     fs = config['sample_rate']
     channels = config['channels']
     
@@ -32,7 +32,7 @@ def main():
     
     output_path = args.output
     if not os.path.isabs(output_path):
-        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
         output_path = os.path.join(base_dir, output_path)
         
     out_dir = os.path.dirname(output_path)

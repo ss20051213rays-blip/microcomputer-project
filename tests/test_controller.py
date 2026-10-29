@@ -1,9 +1,9 @@
 import sys
 import os
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from src.vision import VisionObservation
-from src.controller import DeadzoneStepController
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
+from pantilt.perception.vision import VisionObservation
+from pantilt.domain.controller import DeadzoneStepController
 import time
 
 def main():

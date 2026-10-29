@@ -14,9 +14,9 @@ import sys
 import time
 import argparse
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from src.config import load_config, setup_logger
-from src.servo import ServoController
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'src')))
+from pantilt.core.config import load_config, setup_logger
+from pantilt.actuation.servo import ServoController
 
 def main():
     parser = argparse.ArgumentParser(description="微雪串行总线舵机与二维云台调试工具")
@@ -28,7 +28,7 @@ def main():
     parser.add_argument("--sweep", action="store_true", help="执行双轴扫掠测试")
     args = parser.parse_args()
 
-    config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", args.config))
+    config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', args.config))
     config = load_config(config_path)
     logger = setup_logger(config)
 

@@ -7,11 +7,11 @@ import argparse
 import threading
 from enum import Enum
 
-from src.config import load_config, setup_logger
-from src.servo import ServoController
-from src.audio import AudioPipeline, AudioEvent
-from src.vision import VisionPipeline, VisionObservation
-from src.controller import DeadzoneStepController
+from pantilt.core.config import load_config, setup_logger
+from pantilt.actuation.servo import ServoController
+from pantilt.perception.audio import AudioPipeline, AudioEvent
+from pantilt.perception.vision import VisionPipeline, VisionObservation
+from pantilt.domain.controller import DeadzoneStepController
 
 logger = logging.getLogger("App")
 
@@ -422,7 +422,7 @@ def run_simulation_test(config) -> bool:
 
 def main():
     parser = argparse.ArgumentParser(description="视听融合声源定位与目标跟踪云台主控系统")
-    default_cfg = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "configs", "default.yaml"))
+    default_cfg = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', "configs", "default.yaml"))
     parser.add_argument("--config", default=default_cfg, help="配置文件路径")
     parser.add_argument("--dry-run", action="store_true", help="无硬件干运行模式")
     parser.add_argument("--simulate", action="store_true", help="执行自动化确定性模拟验收测试")

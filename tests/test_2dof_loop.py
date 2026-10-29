@@ -11,11 +11,11 @@ import os
 import sys
 import time
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from src.config import load_config, setup_logger
-from src.app import PanTiltTrackerApp, SystemState
-from src.audio import AudioEvent
-from src.vision import VisionObservation
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
+from pantilt.core.config import load_config, setup_logger
+from pantilt.app import PanTiltTrackerApp, SystemState
+from pantilt.perception.audio import AudioEvent
+from pantilt.perception.vision import VisionObservation
 
 def main():
     config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "configs", "default.yaml"))

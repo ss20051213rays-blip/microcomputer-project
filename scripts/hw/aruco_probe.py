@@ -19,8 +19,8 @@ try:
 except ImportError:
     cv2 = None
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from src.config import load_config, setup_logger
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'src')))
+from pantilt.core.config import load_config, setup_logger
 
 def get_aruco_detector(dict_name="DICT_4X4_50"):
     if not cv2:
@@ -68,7 +68,7 @@ def main():
     parser.add_argument("--seconds", type=float, default=10.0, help="实时检测时长 (秒)")
     args = parser.parse_args()
 
-    config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", args.config))
+    config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', args.config))
     config = load_config(config_path)
     logger = setup_logger(config)
 

@@ -9,16 +9,16 @@ except ImportError:
     print("cv2 needed.")
     sys.exit(1)
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from src.config import load_config, setup_logger
-from src.vision import CameraCapture, FaceDetector
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'src')))
+from pantilt.core.config import load_config, setup_logger
+from pantilt.perception.vision import CameraCapture, FaceDetector
 
 def main():
     parser = argparse.ArgumentParser(description="人脸检测与 dx 像素偏差测试")
     parser.add_argument("--seconds", type=float, default=15.0, help="测试时长")
     args = parser.parse_args()
 
-    config = load_config(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "configs", "default.yaml")))
+    config = load_config(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', "configs", "default.yaml")))
     logger = setup_logger(config)
     
     print("=== 人脸检测性能测试 ===")
