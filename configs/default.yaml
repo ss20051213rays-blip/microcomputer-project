@@ -1,14 +1,14 @@
 # 视听融合声源定位与目标跟踪云台 · 默认配置
 # 所有可调参数统一在此文件管理，源码中不硬编码阈值 / 限位 / 步长
-# 修改后需记录到项目日志，并说明改动原因和测试结果
+# 本配置已对齐最新采购硬件（2-DOF总线舵机、微雪驱动板、酷态科独立供电、OV9281 120fps、ArUco靶标、激光指示与WM8960）
 
 # ── 配置元数据 ──────────────────────────────────────────────────────────────
-config_version: "0.1.0"          # 每次参数变化递增，用于日志追溯
+config_version: "0.2.0"          # 升级至 0.2.0：支持总线舵机二维平台与多模态目标跟踪
 
-# ── 音频参数（M3）──────────────────────────────────────────────────────────
+# ── 音频参数（M3: WM8960 硬件双麦）────────────────────────────────────────
 audio:
-  device_name: ""                 # 留空则 sounddevice 自动选择；可填设备名或稳定 ID
-  sample_rate: 16000              # Hz，必须与麦克风实际支持率一致
+  device_name: ""                 # 留空则 sounddevice 自动选择；推荐填写 "wm8960" 或 "hw:wm8960soundcard"
+  sample_rate: 16000              # Hz，WM8960 硬件支持 16000 / 48000
   channels: 2                     # 双通道，左通道 ch0，右通道 ch1
   dtype: "int16"
 
@@ -21,45 +21,108 @@ audio:
   pre_roll_ms: 50                 # 触发前预滚窗口（ms），用于 GCC-PHAT 捕获起始
 
   # GCC-PHAT 定位
-  mic_spacing_m: 0.065            # 麦克风间距（m），实测后修正
+  mic_spacing_m: 0.065            # WM8960 板载双麦物理间距约 0.065 m (65mm)
   sound_speed_mps: 343.0          # 声速（m/s）
   audio_zero_deg: 0.0             # 声学零点偏置（°），实测后修正
   gcc_confidence_threshold: 0.3   # 低于此值切换能量差降级模式
   fallback_angle_deg: 30.0        # 侧别降级时的固定转角（°）
 
-# ── 相机参数（M4）──────────────────────────────────────────────────────────
+# ── 相机与目标跟踪参数（M4: OV9281 120fps 全局快门 / ArUco / 人脸）────────────
 camera:
-  backend: "picamera2"            # "picamera2" | "opencv"（保底）
-  device_index: 0                 # OpenCV 保底时的设备编号
-  width: 320
-  height: 240
-  detect_fps: 15                  # 目标检测帧率上限
-  camera_cx: 160                  # 图像中心列（= width / 2，需实测修正）
+  backend: "opencv"               # OV9281 UVC 免驱相机使用 OpenCV VideoCapture 取流
+  device_index: 0                 # /dev/video0 设备编号
+  width: 640                      # 取流宽度（可设 1280x800 或 640x400 以降低算力）
+  height: 400                     # 取流高度
+  detect_fps: 120                 # OV9281 支持最高 120 FPS
+  camera_cx: 320                  # 水平图像中心列（= width / 2）
+  camera_cy: 200                  # 垂直图像中心行（= height / 2）
 
-  # 人脸检测
+  # 目标跟踪模式选择
+  target_mode: "aruco"            # "aruco"（工业靶标高精基准，推荐） | "face"（人机交互人脸检测）
+
+  # ArUco 工业靶标参数 (12cm 5mm 哑光雪弗板 UV 打印)
+  aruco:
+    dictionary: "DICT_4X4_50"     # 对应采购的 4x4 50 字典
+    target_ids: [10, 11, 12, 13, 14, 15, 16, 17] # 采购的标志板 ID 组
+    marker_size_m: 0.12           # 物理尺寸 12 cm = 0.12 m
+
+  # 人脸检测参数（用于 face 模式）
   detector: "mediapipe"           # "mediapipe" | "haar"（保底）
   haar_cascade: "haarcascade_frontalface_default.xml"
   min_detection_confidence: 0.5   # MediaPipe 最低置信度
   observation_timeout_s: 0.3      # 观测超过此时间不再使用（防旧帧控制）
 
-# ── 舵机参数（M2）──────────────────────────────────────────────────────────
+# ── 舵机与执行器参数（M2: 总线舵机二维平台 + 微雪 Bus Servo Adapter）─────────
 servo:
-  servo_gpio: 18                  # 树莓派硬件 PWM 引脚（BCM 编号），默认 GPIO 18
-  pulse_min_us: 500               # 最小脉宽（µs），实测后修正（勿假定 1000）
-  pulse_max_us: 2500              # 最大脉宽（µs），实测后修正（勿假定 2000）
-  servo_mid: 1500                 # 中位脉宽（µs），实测后修正（勿假定 1500）
-  min_angle: -90.0                # 软件限位：最小角度（°）
-  max_angle: 90.0                 # 软件限位：最大角度（°）
-  servo_sign: 1                   # 方向符号：1 = 正常，-1 = 硬件方向相反时修改此值
-  step_deg: 2.0                   # 每次步进量（°）
-  deadzone_px: 30                 # 视觉死区（像素），小于此值不动
+  driver_type: "bus"              # "bus"（推荐：微雪通用型总线舵机驱动板） | "pwm"（旧版 GPIO 18 SG90 兼容）
+
+  # 串行总线舵机配置 (Waveshare Bus Servo / ST3215 / SC15)
+  serial_port: "/dev/ttyUSB0"     # 微雪驱动板 USB/串口连接端（或树莓派 /dev/ttyAMA0）
+  baudrate: 1000000               # 总线通信波特率：标准 1000000 (1Mbps) 或 115200
+  yaw_id: 1                       # 水平偏航舵机 ID
+  pitch_id: 2                     # 垂直俯仰舵机 ID
+
+  # 角度限位与方向（度）
+  min_yaw_angle: -90.0            # 水平最小限位（°）
+  max_yaw_angle: 90.0             # 水平最大限位（°）
+  min_pitch_angle: -30.0          # 俯仰最小限位（°，低头）
+  max_pitch_angle: 45.0           # 俯仰最大限位（°，抬头）
+
+  yaw_sign: 1                     # 水平运动方向修正：1 或 -1
+  pitch_sign: 1                   # 俯仰运动方向修正：1 或 -1
+
+  # 步进与死区
+  step_deg_yaw: 2.0               # 水平每次步进量（°）
+  step_deg_pitch: 1.5             # 俯仰每次步进量（°）
+  deadzone_px_x: 30               # 水平视觉死区（像素）
+  deadzone_px_y: 25               # 垂直视觉死区（像素）
+
+  # ── 旧版 PWM 驱动兼容参数（当 driver_type 为 "pwm" 时生效）──
+  servo_gpio: 18                  # 树莓派硬件 PWM 引脚
+  pulse_min_us: 500
+  pulse_max_us: 2500
+  servo_mid: 1500
+  min_angle: -90.0
+  max_angle: 90.0
+  servo_sign: 1
+  step_deg: 2.0
+  deadzone_px: 30
+
+# ── 激光指示器参数（物理瞄准指示）────────────────────────────────────────
+laser:
+  enabled: true                   # 是否启用 50mW 小型激光瞄准指示
+  control_mode: "gpio"            # "gpio"（通过树莓派/MOSFET 引脚） | "esp32"（通过 ESP32 协处理器串口指令）
+  gpio_pin: 23                    # 树莓派控制引脚 (BCM 23)
+  lock_min_frames: 3              # 连续稳定在死区中心多少帧才点亮激光
+  max_continuous_s: 10.0          # 安全保护：单次最大持续点亮时间（秒），防过热与人眼安全
+
+# ── 异构双主控 (ESP32 协处理器) 配置 ───────────────────────────────────────
+dual_mcu:
+  esp32_enabled: false            # true 时通过 ESP32 协处理器中转总线与激光；false 时树莓派直连微雪驱动板
+  esp32_port: "/dev/ttyUSB1"      # ESP32 串口端点
+  esp32_baudrate: 115200
 
 # ── 控制逻辑参数（M5）─────────────────────────────────────────────────────
 control:
   turn_timeout_s: 1.5             # TURN_ONCE 超时（s），超时后强制进入 FOLLOW
-  lost_timeout_s: 3.0             # FOLLOW 无脸超时（s），超时后回中并回 IDLE
+  lost_timeout_s: 3.0             # FOLLOW 无目标超时（s），超时后回中并回 IDLE
+  turn_settle_s: 0.3              # 转向到位平息时间（s）
   follow_interval_ms: 50          # 视觉跟随控制周期（ms），约 20 Hz
   main_loop_hz: 30                # 主循环频率（Hz）
+
+# ── 音响与语音播报参数（M7 拓展）─────────────────────────────────────────
+speaker:
+  enabled: false                  # M7 尚未实现；模块落地并完成验证后再启用
+  audio_file: "assets/audio/locked.wav" # 视觉锁定提示音路径
+  lock_min_frames: 2              # 连续稳定检测到人脸多少帧视为稳定锁定并触发播报
+
+# ── 屏幕显示与实况 HUD 参数（M7 拓展）──────────────────────────────────────
+display:
+  enabled: false                  # M7 尚未实现；模块落地并完成验证后再启用
+  window_name: "Pan-Tilt Visual Tracking (OV9281 120fps)"
+  show_hud: true                  # 是否在图像上绘制锁定框、十字准星与状态文字
+  window_width: 640               # 显示窗口宽度
+  window_height: 480              # 显示窗口高度
 
 # ── 日志参数（M0）──────────────────────────────────────────────────────────
 logging:
@@ -71,7 +134,8 @@ logging:
     - state
     - theta_audio
     - dx
-    - theta_cmd
+    - dy
+    - theta_cmd_yaw
+    - theta_cmd_pitch
     - fps
     - event
-

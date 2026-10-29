@@ -2,11 +2,9 @@ import sys
 import os
 import time
 
-# 将项目根目录加入 import 路径
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from src.config import load_config, setup_logger
-from src.servo import ServoController
+from pantilt.core.config import load_config, setup_logger
+from pantilt.core.paths import DEFAULT_CONFIG
+from pantilt.actuation.servo import ServoController
 
 def basic_test(servo):
     print("\n[基础测试] 正在执行: 中位(0°) -> 左转(-30°) -> 右转(+30°) -> 回中(0°)")
@@ -44,10 +42,7 @@ def stress_test(servo):
         time.sleep(0.5)
 
 def main():
-    # 获取项目根目录，拼出配置文件的绝对路径，防止在不同目录下运行找不到文件
-    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-    config_path = os.path.join(base_dir, "configs", "default.yaml")
-    config = load_config(config_path)
+    config = load_config(DEFAULT_CONFIG)
     logger = setup_logger(config)
     
     dry_run = "--dry-run" in sys.argv

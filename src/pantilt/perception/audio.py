@@ -3,26 +3,20 @@ import queue
 import logging
 import threading
 import numpy as np
-from dataclasses import dataclass
 
 try:
     import sounddevice as sd
 except ImportError:
     sd = None
 
+from pantilt.core.types import AudioEvent
+
 logger = logging.getLogger("App")
 
-@dataclass
-class AudioEvent:
-    timestamp_mono: float
-    theta_audio_deg: float
-    side: str          # "left", "right", "center"
-    confidence: float
-    method: str        # "gcc_phat" or "energy_diff"
-
 class AudioPipeline:
-    def __init__(self, config_audio):
+    def __init__(self, config_audio, dry_run=False):
         self.config = config_audio
+        self.dry_run = dry_run
         self.fs = self.config.get("sample_rate", 16000)
         self.channels = self.config.get("channels", 2)
         self.blocksize = self.config.get("blocksize", 1024)
@@ -62,6 +56,11 @@ class AudioPipeline:
                 pass
                 
     def start(self):
+        if self.dry_run:
+            logger.info("音频采集与处理管线 (M3) 处于 DRY-RUN 模式。")
+            self.running = True
+            return True
+
         if not sd:
             logger.error("sounddevice 模块未安装，无法启动音频流。")
             return False
@@ -114,8 +113,11 @@ class AudioPipeline:
             if rms > self.energy_threshold:
                 now = time.monotonic()
                 if now - self.last_event_time > self.min_event_gap:
+                    if block_float.ndim < 2 or block_float.shape[1] < 2:
+                        logger.warning("音频采样数据非双通道，无法进行时延测向。")
+                        continue
                     self.last_event_time = now
-                    
+                        
                     ch0 = block_float[:, 0]
                     ch1 = block_float[:, 1]
                     
