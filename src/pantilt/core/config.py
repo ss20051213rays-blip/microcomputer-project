@@ -1,36 +1,37 @@
+"""配置文件加载与校验基础设施。"""
+import sys
+from pathlib import Path
+from typing import Any, Dict, Union
+
 try:
     import yaml
 except ImportError:
     try:
         from ruamel.yaml import YAML
+
         class _YamlCompat:
             @staticmethod
             def safe_load(stream):
-                y = YAML(typ='safe')
+                y = YAML(typ="safe")
                 return y.load(stream)
+
         yaml = _YamlCompat()
     except ImportError:
         yaml = None
 
-import logging
-import sys
+from pantilt.core.logging_setup import setup_logger
+from pantilt.core.paths import DEFAULT_CONFIG
 
-def setup_logger(config):
-    level_str = config.get("logging", {}).get("level", "INFO")
-    level = getattr(logging, level_str.upper(), logging.INFO)
-    logging.basicConfig(
-        level=level,
-        format='%(asctime)s [%(levelname)s] %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-    return logging.getLogger("App")
 
-def load_config(path):
+def load_config(path: Union[str, Path] = DEFAULT_CONFIG) -> Dict[str, Any]:
+    """加载并解析 YAML 配置文件，进行必要配置段完整性校验。"""
     if yaml is None:
         print("[Fatal] Neither PyYAML nor ruamel.yaml is installed.")
         sys.exit(1)
+
+    path_obj = Path(path)
     try:
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path_obj, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)
     except Exception as e:
         print(f"[Fatal] Failed to load config {path}: {e}")
@@ -45,3 +46,5 @@ def load_config(path):
 
     return config
 
+
+__all__ = ["load_config", "setup_logger"]

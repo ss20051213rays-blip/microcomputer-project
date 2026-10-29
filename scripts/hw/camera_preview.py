@@ -9,9 +9,8 @@ except ImportError:
     print("Error: OpenCV not installed. Run: pip install opencv-python")
     sys.exit(1)
 
-# 加入项目根目录
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'src')))
 from pantilt.core.config import load_config, setup_logger
+from pantilt.core.paths import DEFAULT_CONFIG, DATA_DIR
 from pantilt.perception.vision import CameraCapture
 
 def main():
@@ -19,7 +18,7 @@ def main():
     parser.add_argument("--seconds", type=float, default=10.0, help="测试运行时长 (秒)")
     args = parser.parse_args()
 
-    config = load_config(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', "configs", "default.yaml")))
+    config = load_config(DEFAULT_CONFIG)
     logger = setup_logger(config)
     
     cam = CameraCapture(config['camera'])
@@ -39,9 +38,9 @@ def main():
         # 保存一张样本图测试方向
         frame = cam.get_latest_frame()
         if frame is not None:
-            out_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', "data", "test_frame.jpg"))
-            os.makedirs(os.path.dirname(out_path), exist_ok=True)
-            cv2.imwrite(out_path, frame)
+            out_path = DATA_DIR / "test_frame.jpg"
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            cv2.imwrite(str(out_path), frame)
             print(f"[+] 成功保存测试样图至: {out_path}，请核实方向是否颠倒。")
         else:
             print("[-] 未能获取到初始图像。")

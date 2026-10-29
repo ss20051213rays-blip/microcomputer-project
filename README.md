@@ -93,11 +93,14 @@ OV9281 相机 (120fps 全局快门) -> CameraCapture 最新帧 -> ArUco / 人脸
 ### 1. 软件脱机自动化验证（无需硬件即可运行）
 
 ```bash
-# 1. 死区两轴步进逻辑模拟测试
-python tests/test_controller.py
+# 0. 安装项目（开发模式）
+pip install -e .
 
-# 2. 状态机三态 FSM 脱机确定性验收
-python tests/test_state_machine.py
+# 1. 执行全量 pytest 自动化测试套件 (14 项单测全绿)
+pytest
+
+# 2. 视听融合状态机脱机确定性模拟验收 (8 项核心业务场景)
+python -m pantilt --simulate
 
 # 3. 二维总线云台与激光指示联动脱机闭环测试 (2-DOF)
 python tests/test_2dof_loop.py

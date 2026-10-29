@@ -3,15 +3,15 @@ import os
 import time
 import argparse
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'src')))
 from pantilt.core.config import load_config, setup_logger
+from pantilt.core.paths import DEFAULT_CONFIG
 from pantilt.perception.audio import AudioPipeline
 
 def main():
     parser = argparse.ArgumentParser(description="GCC-PHAT 角度估计精准度测试工具")
     args = parser.parse_args()
 
-    config = load_config(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', "configs", "default.yaml")))
+    config = load_config(DEFAULT_CONFIG)
     logger = setup_logger(config)
     
     print("=== GCC-PHAT 方位角测试 ===")

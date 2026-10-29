@@ -3,22 +3,15 @@ import queue
 import logging
 import threading
 import numpy as np
-from dataclasses import dataclass
 
 try:
     import sounddevice as sd
 except ImportError:
     sd = None
 
-logger = logging.getLogger("App")
+from pantilt.core.types import AudioEvent
 
-@dataclass
-class AudioEvent:
-    timestamp_mono: float
-    theta_audio_deg: float
-    side: str          # "left", "right", "center"
-    confidence: float
-    method: str        # "gcc_phat" or "energy_diff"
+logger = logging.getLogger("App")
 
 class AudioPipeline:
     def __init__(self, config_audio, dry_run=False):

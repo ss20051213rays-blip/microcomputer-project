@@ -1,7 +1,6 @@
 import threading
 import time
 import logging
-from dataclasses import dataclass
 import numpy as np
 
 try:
@@ -14,23 +13,9 @@ try:
 except ImportError:
     mp = None
 
+from pantilt.core.types import VisionObservation
+
 logger = logging.getLogger("App")
-
-@dataclass
-class VisionObservation:
-    timestamp_mono: float
-    face_found: bool
-    dx_px: float
-    bbox: tuple  # (x, y, w, h)
-    confidence: float
-    fps: float
-    dy_px: float = 0.0          # 俯仰垂直偏差 (像素)
-    target_id: int = -1         # 检出的目标 ID (如 ArUco 标记 ID)
-
-    @property
-    def target_found(self) -> bool:
-        """目标存在别名（兼容 ArUco 靶标与人脸）"""
-        return self.face_found
 
 class CameraCapture:
     def __init__(self, config_camera):

@@ -19,8 +19,8 @@ try:
 except ImportError:
     cv2 = None
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'src')))
 from pantilt.core.config import load_config, setup_logger
+from pantilt.core.paths import DEFAULT_CONFIG
 
 def get_aruco_detector(dict_name="DICT_4X4_50"):
     if not cv2:
@@ -62,14 +62,13 @@ def generate_synthetic_aruco_image(marker_id=10, size=400, border=100, dict_name
 
 def main():
     parser = argparse.ArgumentParser(description="ArUco 工业靶标检测与偏差分析工具")
-    parser.add_argument("--config", default="configs/default.yaml", help="配置文件路径")
+    parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="配置文件路径")
     parser.add_argument("--dry-run", action="store_true", help="脱机合成靶标测试模式")
     parser.add_argument("--camera", action="store_true", help="打开实际相机进行实时检测")
     parser.add_argument("--seconds", type=float, default=10.0, help="实时检测时长 (秒)")
     args = parser.parse_args()
 
-    config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', args.config))
-    config = load_config(config_path)
+    config = load_config(args.config)
     logger = setup_logger(config)
 
     cfg_cam = config.get("camera", {})

@@ -14,13 +14,13 @@ import sys
 import time
 import argparse
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'src')))
 from pantilt.core.config import load_config, setup_logger
+from pantilt.core.paths import DEFAULT_CONFIG
 from pantilt.actuation.servo import ServoController
 
 def main():
     parser = argparse.ArgumentParser(description="微雪串行总线舵机与二维云台调试工具")
-    parser.add_argument("--config", default="configs/default.yaml", help="配置文件路径")
+    parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="配置文件路径")
     parser.add_argument("--dry-run", action="store_true", help="脱机模拟模式")
     parser.add_argument("--yaw", type=float, help="设置水平偏航角度 (-90 ~ 90)")
     parser.add_argument("--pitch", type=float, help="设置垂直俯仰角度 (-30 ~ 45)")
@@ -28,8 +28,7 @@ def main():
     parser.add_argument("--sweep", action="store_true", help="执行双轴扫掠测试")
     args = parser.parse_args()
 
-    config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', args.config))
-    config = load_config(config_path)
+    config = load_config(args.config)
     logger = setup_logger(config)
 
     cfg_servo = config.get("servo", {})
