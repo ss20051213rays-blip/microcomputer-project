@@ -1,7 +1,7 @@
 """视听融合声源定位与目标跟踪应用控制流程。"""
 import logging
 import time
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from pantilt.adapters.actuation.laser import LaserIndicator
 from pantilt.adapters.actuation.servo import ServoController
@@ -39,7 +39,7 @@ class PanTiltTrackerApp:
         self.controller = controller
         self.laser = laser
         self.state_machine = state_machine
-        self.console = console or ConsoleListener(on_center=self._handle_console_center, on_quit=self.stop)
+        self.console = console
 
         self.main_loop_hz = main_loop_hz
         self.heartbeat_interval_s = heartbeat_interval_s
@@ -88,7 +88,8 @@ class PanTiltTrackerApp:
         now = time.monotonic()
         self.state_machine.reset(now)
         self.last_heartbeat_mono = now
-        self.console.start()
+        if self.console:
+            self.console.start()
         logger.info("云台系统启动成功，当前状态: IDLE (监听环境中...)")
         return True
 
@@ -98,7 +99,8 @@ class PanTiltTrackerApp:
             return
         logger.info("正在安全停止系统...")
         self.running = False
-        self.console.stop()
+        if self.console:
+            self.console.stop()
 
         try:
             self.laser.disable()

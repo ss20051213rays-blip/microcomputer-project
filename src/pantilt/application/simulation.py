@@ -10,7 +10,7 @@ from pantilt.infrastructure.paths import DEFAULT_CONFIG
 
 def run_simulation_test(config: Optional[Dict[str, Any]] = None) -> bool:
     """
-    自动化脱机确定性模拟测试 (阶段五验收项，兼容 CLI 与旧脚本)。
+    自动化脱机确定性模拟验收测试 (阶段五验收项，覆盖完整业务闭环)。
     覆盖：有效音频开环转向 -> 转向到位平息 -> 视觉跟随步进 -> 死区过滤 -> 丢脸超时回中 -> 安全退出
     """
     if config is None:

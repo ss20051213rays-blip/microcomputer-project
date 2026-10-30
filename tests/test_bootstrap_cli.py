@@ -33,7 +33,7 @@ def test_cli_parse_args():
     assert args2.dry_run is False
 
 
-def test_cli_simulate_execution(monkeypatch, app_config):
+def test_cli_simulate_execution():
     """验证 CLI 执行 --simulate 模式顺利返回 0。"""
     exit_code = main(["--simulate"])
     assert exit_code == 0
