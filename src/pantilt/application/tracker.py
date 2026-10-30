@@ -17,50 +17,41 @@ logger = logging.getLogger("App")
 
 class PanTiltTrackerApp:
     """
-    云台主控程序：组合根。
-    组装感知（音频/视觉）、决策（死区控制器/三态状态机）、执行（总线舵机/激光联锁）与终端交互。
+    云台主控应用：生命周期与控制流程管理。
+    所有具体感知、执行与控制组件均通过外部依赖注入完成装配。
     """
 
-    def __init__(self, config: Dict[str, Any], dry_run: bool = False):
-        self.config = config
-        self.dry_run = dry_run
+    def __init__(
+        self,
+        servo: ServoController,
+        audio: AudioPipeline,
+        vision: VisionPipeline,
+        controller: DeadzoneStepController,
+        laser: LaserIndicator,
+        state_machine: TrackerStateMachine,
+        console: Optional[ConsoleListener] = None,
+        main_loop_hz: int = 30,
+        heartbeat_interval_s: float = 2.0,
+    ):
+        self.servo = servo
+        self.audio = audio
+        self.vision = vision
+        self.controller = controller
+        self.laser = laser
+        self.state_machine = state_machine
+        self.console = console or ConsoleListener(on_center=self._handle_console_center, on_quit=self.stop)
 
-        cfg_ctrl = self.config.get("control", {})
-        cfg_servo = self.config.get("servo", {})
-        cfg_audio = self.config.get("audio", {})
-        cfg_camera = self.config.get("camera", {})
-        cfg_laser = self.config.get("laser", {})
-
-        self.main_loop_hz = cfg_ctrl.get("main_loop_hz", 30)
-        self.heartbeat_interval_s = 2.0
-
-        # 组件装配
-        self.servo = ServoController(cfg_servo, dry_run=self.dry_run)
-        self.audio = AudioPipeline(cfg_audio, dry_run=self.dry_run)
-        self.vision = VisionPipeline(cfg_camera, dry_run=self.dry_run)
-        self.controller = DeadzoneStepController(cfg_ctrl, cfg_servo)
-        self.laser = LaserIndicator(cfg_laser, dry_run=self.dry_run)
-        self.state_machine = TrackerStateMachine(cfg_ctrl, cfg_laser)
-
-        self.console = ConsoleListener(on_center=self._handle_console_center, on_quit=self.stop)
+        self.main_loop_hz = main_loop_hz
+        self.heartbeat_interval_s = heartbeat_interval_s
 
         self.running = False
         self.last_heartbeat_mono = 0.0
         self.last_audio_event: Optional[AudioEvent] = None
         self.last_vision_obs: Optional[VisionObservation] = None
 
-    # 兼容性属性代理
     @property
     def state(self) -> SystemState:
         return self.state_machine.state
-
-    @state.setter
-    def state(self, value: SystemState):
-        self.state_machine.state = value
-
-    @property
-    def laser_enabled(self) -> bool:
-        return self.laser.enabled
 
     @property
     def laser_is_on(self) -> bool:
@@ -71,28 +62,8 @@ class PanTiltTrackerApp:
         return self.state_machine.turn_settle_s
 
     @property
-    def turn_timeout_s(self) -> float:
-        return self.state_machine.turn_timeout_s
-
-    @property
     def lost_timeout_s(self) -> float:
         return self.state_machine.lost_timeout_s
-
-    @property
-    def turn_target_angle(self) -> float:
-        return self.state_machine.turn_target_angle
-
-    @property
-    def last_face_mono(self) -> float:
-        return self.state_machine.last_face_mono
-
-    @last_face_mono.setter
-    def last_face_mono(self, val: float):
-        self.state_machine.last_face_mono = val
-
-    def _set_laser(self, enable: bool, now: Optional[float] = None):
-        """兼容旧接口的激光控制调用。"""
-        self.laser.set_laser(enable, now)
 
     def _handle_console_center(self):
         self.laser.reset()
@@ -163,7 +134,7 @@ class PanTiltTrackerApp:
                 else "无"
             )
             lost_dur = (
-                f"{now - self.last_face_mono:.1f}s"
+                f"{now - self.state_machine.last_face_mono:.1f}s"
                 if self.state == SystemState.FOLLOW
                 else "N/A"
             )

@@ -32,7 +32,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.simulate:
         success = run_simulation_test(config)
-        sys.exit(0 if success else 1)
+        return 0 if success else 1
 
     app = create_app(config, dry_run=args.dry_run)
 
@@ -44,8 +44,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     signal.signal(signal.SIGINT, sig_handler)
     signal.signal(signal.SIGTERM, sig_handler)
 
-    sys.exit(app.run())
+    return app.run()
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

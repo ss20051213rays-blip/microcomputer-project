@@ -1,27 +1,9 @@
 """状态机脱机模拟验收测试与 pytest 用例集。"""
 import time
-from typing import Any, Dict
-
-import pytest
 
 from pantilt.application.simulation import run_simulation_test
-from pantilt.application.tracker import PanTiltTrackerApp
+from pantilt.bootstrap import create_app
 from pantilt.domain.types import AudioEvent, SystemState, VisionObservation
-from pantilt.infrastructure.config import load_config
-from pantilt.infrastructure.paths import DEFAULT_CONFIG
-
-
-@pytest.fixture
-def app_config() -> Dict[str, Any]:
-    return load_config(DEFAULT_CONFIG)
-
-
-@pytest.fixture
-def running_app(app_config):
-    app = PanTiltTrackerApp(app_config, dry_run=True)
-    assert app.start(), "app.start() failed in fixture"
-    yield app
-    app.stop()
 
 
 def test_01_initial_idle_and_centered(running_app):
@@ -156,7 +138,7 @@ def test_07_lost_target_timeout_recenter(running_app):
 
 def test_08_safe_shutdown(app_config):
     """测试项 8: 系统资源与管线按序释放，舵机 PWM 成功关闭。"""
-    app = PanTiltTrackerApp(app_config, dry_run=True)
+    app = create_app(app_config, dry_run=True)
     assert app.start()
     app.stop()
     assert not app.running

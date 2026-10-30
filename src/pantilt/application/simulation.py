@@ -2,7 +2,7 @@
 import time
 from typing import Any, Dict, Optional
 
-from pantilt.application.tracker import PanTiltTrackerApp
+from pantilt.bootstrap import create_app
 from pantilt.domain.types import AudioEvent, SystemState, VisionObservation
 from pantilt.infrastructure.config import load_config
 from pantilt.infrastructure.paths import DEFAULT_CONFIG
@@ -20,7 +20,7 @@ def run_simulation_test(config: Optional[Dict[str, Any]] = None) -> bool:
     print("      视听融合状态机脱机确定性模拟验收测试 (Phase 5)      ")
     print("==================================================")
 
-    app = PanTiltTrackerApp(config, dry_run=True)
+    app = create_app(config, dry_run=True)
     if not app.start():
         print("[FAIL] app.start() 失败！")
         return False
