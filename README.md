@@ -29,11 +29,11 @@
 
 | 模块 | 状态 | 核心代码与测试支撑 |
 | :--- | :--- | :--- |
-| **M0 配置与入口** | ✅ 已实现 | `src/pantilt/core/config.py`，支持 ruamel / PyYAML 兼容加载；`configs/default.yaml` (v0.2.0) |
+| **M0 配置与入口** | ✅ 已实现 | `src/pantilt/infrastructure/config.py`，支持 ruamel / PyYAML 兼容加载；`configs/default.yaml` (v0.2.0) |
 | **M1 动力与供电** | ✅ 接线方案就绪 | 酷态科 6A 快充 + 诱骗线直连微雪驱动板 VIN，树莓派逻辑供电完全物理隔离 |
-| **M2 总线舵机** | ✅ 已重构并通过脱机验证 | `src/pantilt/actuation/servo.py` 原生支持微雪串行总线双轴（Yaw+Pitch）驱动与旧版 PWM 兼容回退 |
+| **M2 总线舵机** | ✅ 已重构并通过脱机验证 | `src/pantilt/adapters/actuation/servo.py` 原生支持微雪串行总线双轴（Yaw+Pitch）驱动与旧版 PWM 兼容回退 |
 | **M3 硬件双麦** | ⏳ 驱动与实测待办 | 已实现 SED 能量检测与 GCC-PHAT 亚采样插值；WM8960 实机加载待现场测试 |
-| **M4 视觉前端** | ✅ 已重构并通过合成验证 | `src/pantilt/perception/vision.py` 支持 ArUco 靶标与人脸双模，输出双轴偏差 $(dx, dy)$ |
+| **M4 视觉前端** | ✅ 已重构并通过合成验证 | `src/pantilt/adapters/perception/vision.py` 支持 ArUco 靶标与人脸双模，输出双轴偏差 $(dx, dy)$ |
 | **M5 控制与状态机**| ✅ 已重构并通过脱机闭环 | `src/pantilt/domain/controller.py` 两轴死区控制 + 50mW 激光器安全联锁；`tests/test_2dof_loop.py` 100% PASS |
 | **M6 异构协作** | ⏳ 增强设计已冻结 | 优先打通树莓派 USB 直连微雪驱动板，ESP32 协处理器作为实时增强 |
 | **M7 交互多媒体** | ⏳ 设计就绪 | 拓展坞已到位，支持 HDMI 屏幕 HUD 仪表盘与“目标已锁定”语音播报 |

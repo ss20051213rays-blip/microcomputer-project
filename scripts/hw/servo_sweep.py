@@ -2,9 +2,9 @@ import sys
 import os
 import time
 
-from pantilt.core.config import load_config, setup_logger
-from pantilt.core.paths import DEFAULT_CONFIG
-from pantilt.actuation.servo import ServoController
+from pantilt.adapters.actuation.servo import ServoController
+from pantilt.infrastructure.config import load_config, setup_logger
+from pantilt.infrastructure.paths import DEFAULT_CONFIG
 
 def basic_test(servo):
     print("\n[基础测试] 正在执行: 中位(0°) -> 左转(-30°) -> 右转(+30°) -> 回中(0°)")

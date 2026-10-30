@@ -3,9 +3,9 @@ from typing import Any, Dict
 
 import pytest
 
-from pantilt.app import PanTiltTrackerApp
-from pantilt.core.config import load_config
-from pantilt.core.paths import DEFAULT_CONFIG
+from pantilt.application.tracker import PanTiltTrackerApp
+from pantilt.infrastructure.config import load_config
+from pantilt.infrastructure.paths import DEFAULT_CONFIG
 
 
 @pytest.fixture(scope="session")

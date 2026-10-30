@@ -9,9 +9,9 @@ except ImportError:
     print("cv2 needed.")
     sys.exit(1)
 
-from pantilt.core.config import load_config, setup_logger
-from pantilt.core.paths import DEFAULT_CONFIG
-from pantilt.perception.vision import CameraCapture, FaceDetector
+from pantilt.adapters.perception.vision import CameraCapture, FaceDetector
+from pantilt.infrastructure.config import load_config, setup_logger
+from pantilt.infrastructure.paths import DEFAULT_CONFIG
 
 def main():
     parser = argparse.ArgumentParser(description="人脸检测与 dx 像素偏差测试")

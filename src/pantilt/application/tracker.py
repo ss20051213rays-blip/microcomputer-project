@@ -1,22 +1,16 @@
-"""视听融合声源定位与目标跟踪云台主控装配根 (Composition Root)。"""
-import argparse
+"""视听融合声源定位与目标跟踪应用控制流程。"""
 import logging
-import signal
-import sys
 import time
 from typing import Any, Dict, Optional
 
-from pantilt.actuation.laser import LaserIndicator
-from pantilt.actuation.servo import ServoController
-from pantilt.core.config import load_config
-from pantilt.core.logging_setup import setup_logger
-from pantilt.core.paths import DEFAULT_CONFIG
-from pantilt.core.types import AudioEvent, SystemState, VisionObservation
+from pantilt.adapters.actuation.laser import LaserIndicator
+from pantilt.adapters.actuation.servo import ServoController
+from pantilt.adapters.perception.audio import AudioPipeline
+from pantilt.adapters.perception.vision import VisionPipeline
+from pantilt.adapters.runtime.console import ConsoleListener
 from pantilt.domain.controller import DeadzoneStepController
 from pantilt.domain.state_machine import TrackerStateMachine
-from pantilt.perception.audio import AudioPipeline
-from pantilt.perception.vision import VisionPipeline
-from pantilt.runtime.console import ConsoleListener
+from pantilt.domain.types import AudioEvent, SystemState, VisionObservation
 
 logger = logging.getLogger("App")
 
@@ -233,34 +227,4 @@ class PanTiltTrackerApp:
         return 0
 
 
-def main():
-    parser = argparse.ArgumentParser(description="视听融合声源定位与目标跟踪云台主控系统")
-    parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="配置文件路径")
-    parser.add_argument("--dry-run", action="store_true", help="无硬件干运行模式")
-    parser.add_argument("--simulate", action="store_true", help="执行自动化确定性模拟验收测试")
-    args = parser.parse_args()
-
-    config = load_config(args.config)
-    setup_logger(config)
-
-    if args.simulate:
-        from tests.test_state_machine import run_simulation_test
-
-        success = run_simulation_test(config)
-        sys.exit(0 if success else 1)
-
-    app = PanTiltTrackerApp(config, dry_run=args.dry_run)
-
-    def sig_handler(signum, frame):
-        logger.info(f"收到系统信号 {signum}，正在安全退出...")
-        app.stop()
-        sys.exit(0)
-
-    signal.signal(signal.SIGINT, sig_handler)
-    signal.signal(signal.SIGTERM, sig_handler)
-
-    sys.exit(app.run())
-
-
-if __name__ == "__main__":
-    main()
+__all__ = ["PanTiltTrackerApp"]

@@ -13,7 +13,7 @@ try:
 except ImportError:
     mp = None
 
-from pantilt.core.types import VisionObservation
+from pantilt.domain.types import VisionObservation
 
 logger = logging.getLogger("App")
 

@@ -3,9 +3,9 @@ import os
 import time
 import argparse
 
-from pantilt.core.config import load_config, setup_logger
-from pantilt.core.paths import DEFAULT_CONFIG
-from pantilt.perception.audio import AudioPipeline
+from pantilt.adapters.perception.audio import AudioPipeline
+from pantilt.infrastructure.config import load_config, setup_logger
+from pantilt.infrastructure.paths import DEFAULT_CONFIG
 
 def main():
     parser = argparse.ArgumentParser(description="声音事件检测 (SED) 阈值调试工具")

@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from pantilt.core.paths import LOG_DIR, resolve_path
+from pantilt.infrastructure.paths import LOG_DIR, resolve_path
 
 
 def setup_logger(config: Optional[Dict[str, Any]] = None) -> logging.Logger:

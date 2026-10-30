@@ -2,7 +2,7 @@
 import time
 import pytest
 
-from pantilt.core.types import VisionObservation
+from pantilt.domain.types import VisionObservation
 from pantilt.domain.controller import DeadzoneStepController
 
 

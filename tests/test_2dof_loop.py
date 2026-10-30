@@ -1,10 +1,11 @@
 """二维总线云台与激光瞄准联动脱机确定性验收测试 (2-DOF)。"""
 import time
 
-from pantilt.app import PanTiltTrackerApp
-from pantilt.core.config import load_config, setup_logger
-from pantilt.core.paths import DEFAULT_CONFIG
-from pantilt.core.types import AudioEvent, SystemState, VisionObservation
+from pantilt.application.tracker import PanTiltTrackerApp
+from pantilt.domain.types import AudioEvent, SystemState, VisionObservation
+from pantilt.infrastructure.config import load_config
+from pantilt.infrastructure.logging_setup import setup_logger
+from pantilt.infrastructure.paths import DEFAULT_CONFIG
 
 
 def test_2dof_tracking_and_laser_interlock():
