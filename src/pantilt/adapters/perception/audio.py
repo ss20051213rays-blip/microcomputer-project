@@ -9,7 +9,7 @@ try:
 except ImportError:
     sd = None
 
-from pantilt.core.types import AudioEvent
+from pantilt.domain.types import AudioEvent
 
 logger = logging.getLogger("App")
 

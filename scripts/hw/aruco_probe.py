@@ -19,8 +19,8 @@ try:
 except ImportError:
     cv2 = None
 
-from pantilt.core.config import load_config, setup_logger
-from pantilt.core.paths import DEFAULT_CONFIG
+from pantilt.infrastructure.config import load_config, setup_logger
+from pantilt.infrastructure.paths import DEFAULT_CONFIG
 
 def get_aruco_detector(dict_name="DICT_4X4_50"):
     if not cv2:

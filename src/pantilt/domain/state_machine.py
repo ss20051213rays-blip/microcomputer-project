@@ -3,7 +3,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-from pantilt.core.types import AudioEvent, SystemState, VisionObservation
+from pantilt.domain.types import AudioEvent, SystemState, VisionObservation
 from pantilt.domain.controller import DeadzoneStepController
 
 logger = logging.getLogger("App")

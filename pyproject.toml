@@ -30,7 +30,7 @@ pi = [
 ]
 
 [project.scripts]
-pantilt = "pantilt.app:main"
+pantilt = "pantilt.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

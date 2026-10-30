@@ -9,9 +9,9 @@ except ImportError:
     print("Error: OpenCV not installed. Run: pip install opencv-python")
     sys.exit(1)
 
-from pantilt.core.config import load_config, setup_logger
-from pantilt.core.paths import DEFAULT_CONFIG, DATA_DIR
-from pantilt.perception.vision import CameraCapture
+from pantilt.adapters.perception.vision import CameraCapture
+from pantilt.infrastructure.config import load_config, setup_logger
+from pantilt.infrastructure.paths import DATA_DIR, DEFAULT_CONFIG
 
 def main():
     parser = argparse.ArgumentParser(description="摄像头取流与测试预览")

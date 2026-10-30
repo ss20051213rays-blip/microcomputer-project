@@ -25,15 +25,23 @@
 
 ---
 
-## 当前状态（截至 2026-10-20）
+## 当前状态（截至 2026-10-30 架构分层重构）
+
+项目已完成轻量分层架构治理与生产-测试解耦，结构分为：
+- **`domain/`（领域层）**：纯领域逻辑与业务模型（`state_machine.py`、`controller.py`、`types.py`），零硬件与第三方依赖。
+- **`application/`（应用层）**：应用调度（`tracker.py`）与独立确定性模拟验收（`simulation.py`）。
+- **`bootstrap.py`（组合根）**：读取配置并完成各层组件的具体依赖装配。
+- **`cli.py`（CLI 入口）**：命令行参数解析与系统信号处理，提供 `pantilt` 命令。
+- **`adapters/`（适配器层）**：硬件执行设备（`actuation/`）、感知前端（`perception/`）与终端交互（`runtime/`）。
+- **`infrastructure/`（基础设施层）**：配置加载校验（`config.py`）、日志（`logging_setup.py`）与仓库路径锚定（`paths.py`）。
 
 | 模块 | 状态 | 核心代码与测试支撑 |
 | :--- | :--- | :--- |
-| **M0 配置与入口** | ✅ 已实现 | `src/pantilt/core/config.py`，支持 ruamel / PyYAML 兼容加载；`configs/default.yaml` (v0.2.0) |
+| **M0 配置与入口** | ✅ 已实现 | `src/pantilt/infrastructure/config.py`、`src/pantilt/bootstrap.py`、`src/pantilt/cli.py` |
 | **M1 动力与供电** | ✅ 接线方案就绪 | 酷态科 6A 快充 + 诱骗线直连微雪驱动板 VIN，树莓派逻辑供电完全物理隔离 |
-| **M2 总线舵机** | ✅ 已重构并通过脱机验证 | `src/pantilt/actuation/servo.py` 原生支持微雪串行总线双轴（Yaw+Pitch）驱动与旧版 PWM 兼容回退 |
+| **M2 总线舵机** | ✅ 已重构并通过脱机验证 | `src/pantilt/adapters/actuation/servo.py` 原生支持微雪串行总线双轴（Yaw+Pitch）驱动与旧版 PWM 兼容回退 |
 | **M3 硬件双麦** | ⏳ 驱动与实测待办 | 已实现 SED 能量检测与 GCC-PHAT 亚采样插值；WM8960 实机加载待现场测试 |
-| **M4 视觉前端** | ✅ 已重构并通过合成验证 | `src/pantilt/perception/vision.py` 支持 ArUco 靶标与人脸双模，输出双轴偏差 $(dx, dy)$ |
+| **M4 视觉前端** | ✅ 已重构并通过合成验证 | `src/pantilt/adapters/perception/vision.py` 支持 ArUco 靶标与人脸双模，输出双轴偏差 $(dx, dy)$ |
 | **M5 控制与状态机**| ✅ 已重构并通过脱机闭环 | `src/pantilt/domain/controller.py` 两轴死区控制 + 50mW 激光器安全联锁；`tests/test_2dof_loop.py` 100% PASS |
 | **M6 异构协作** | ⏳ 增强设计已冻结 | 优先打通树莓派 USB 直连微雪驱动板，ESP32 协处理器作为实时增强 |
 | **M7 交互多媒体** | ⏳ 设计就绪 | 拓展坞已到位，支持 HDMI 屏幕 HUD 仪表盘与“目标已锁定”语音播报 |
@@ -96,7 +104,7 @@ OV9281 相机 (120fps 全局快门) -> CameraCapture 最新帧 -> ArUco / 人脸
 # 0. 安装项目（开发模式）
 pip install -e .
 
-# 1. 执行全量 pytest 自动化测试套件 (14 项单测全绿)
+# 1. 执行全量 pytest 自动化测试套件 (17 项单测全绿)
 pytest
 
 # 2. 视听融合状态机脱机确定性模拟验收 (8 项核心业务场景)
@@ -113,6 +121,8 @@ python scripts/hw/bus_servo_probe.py --dry-run --sweep
 ```
 
 ### 2. 真机单模块独立调试命令
+
+> ⚠️ **前置条件**：运行以下单模块脚本及 CLI 命令前，请确保已在当前 Python 环境执行了可编辑安装 `pip install -e .`。目前项目路径解析依赖仓库内布局（editable 模式）。
 
 | 目标 | 执行命令 | 预期效果与验收重点 |
 | :--- | :--- | :--- |
