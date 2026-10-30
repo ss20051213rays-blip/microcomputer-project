@@ -19,8 +19,8 @@ except ImportError:
     except ImportError:
         yaml = None
 
-from pantilt.core.logging_setup import setup_logger
-from pantilt.core.paths import DEFAULT_CONFIG
+from pantilt.infrastructure.logging_setup import setup_logger
+from pantilt.infrastructure.paths import DEFAULT_CONFIG
 
 
 def load_config(path: Union[str, Path] = DEFAULT_CONFIG) -> Dict[str, Any]:

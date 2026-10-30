@@ -9,8 +9,8 @@ except ImportError:
     print("Error: sounddevice or soundfile not installed. Run: pip install sounddevice soundfile")
     sys.exit(1)
 
-from pantilt.core.config import load_config
-from pantilt.core.paths import DEFAULT_CONFIG, PROJECT_ROOT
+from pantilt.infrastructure.config import load_config
+from pantilt.infrastructure.paths import DEFAULT_CONFIG, PROJECT_ROOT
 
 def main():
     parser = argparse.ArgumentParser(description="双麦克风阵列录音测试")

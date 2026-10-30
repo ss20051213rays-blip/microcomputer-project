@@ -1,5 +1,6 @@
 """python -m pantilt 入口。"""
-from pantilt.app import main
+import sys
+from pantilt.cli import main
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -2,7 +2,7 @@
 from pathlib import Path
 from typing import Union
 
-# src/pantilt/core/paths.py -> 上溯 3 级（索引 3）得到仓库根
+# src/pantilt/infrastructure/paths.py -> 上溯 3 级（索引 3）得到仓库根
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 CONFIG_DIR = PROJECT_ROOT / "configs"

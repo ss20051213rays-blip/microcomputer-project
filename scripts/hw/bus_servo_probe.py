@@ -14,9 +14,9 @@ import sys
 import time
 import argparse
 
-from pantilt.core.config import load_config, setup_logger
-from pantilt.core.paths import DEFAULT_CONFIG
-from pantilt.actuation.servo import ServoController
+from pantilt.adapters.actuation.servo import ServoController
+from pantilt.infrastructure.config import load_config, setup_logger
+from pantilt.infrastructure.paths import DEFAULT_CONFIG
 
 def main():
     parser = argparse.ArgumentParser(description="微雪串行总线舵机与二维云台调试工具")
