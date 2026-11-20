@@ -1,0 +1,604 @@
+/* ==========================================================================
+   细分组件样式表 (Gimbal Cockpit, Telemetry Grid, Terminal Logs)
+   ========================================================================== */
+
+/* ── 视口 3: 云台双联仪表与操控台 (Gimbal Cockpit) ────────────────────────── */
+.gimbal-cockpit {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    gap: 12px;
+    overflow-y: auto;
+}
+
+/* 仪表盘行 */
+.gauges-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.gauge-card {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+}
+
+.gauge-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    font-family: var(--font-mono);
+}
+
+.gauge-title {
+    color: var(--hud-cyan);
+    font-weight: 600;
+}
+
+.gauge-limits {
+    color: var(--text-muted);
+}
+
+.gauge-body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: 4px;
+}
+
+.gauge-arc-wrap {
+    position: relative;
+    width: 140px;
+    height: 75px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.gauge-svg {
+    width: 100%;
+    height: 100%;
+}
+
+.gauge-track {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.1);
+    stroke-width: 8;
+    stroke-linecap: round;
+}
+
+.gauge-fill {
+    fill: none;
+    stroke: var(--hud-cyan);
+    stroke-width: 8;
+    stroke-linecap: round;
+    opacity: 0.3;
+}
+
+.gauge-needle {
+    stroke: var(--hud-cyan);
+    stroke-width: 3;
+    stroke-linecap: round;
+    transition: transform 0.12s ease-out;
+}
+
+.gauge-value {
+    position: absolute;
+    bottom: 2px;
+    font-family: var(--font-mono);
+    font-size: 16px;
+    font-weight: bold;
+    color: #ffffff;
+    text-shadow: 0 0 6px var(--hud-cyan);
+}
+
+/* 交互操控区 (摇杆 + 方向键盘) */
+.controls-row {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 10px;
+    align-items: center;
+}
+
+.joystick-card {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.joystick-label {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.joystick-pad {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.95) 100%);
+    border: 2px solid rgba(0, 243, 255, 0.3);
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: crosshair;
+    box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.8);
+    touch-action: none;
+}
+
+.joystick-crosshair {
+    position: absolute;
+    width: 80%;
+    height: 80%;
+    border-radius: 50%;
+    border: 1px dashed rgba(255, 255, 255, 0.15);
+    pointer-events: none;
+}
+
+.joystick-thumb {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #00f3ff 0%, #0284c7 100%);
+    box-shadow: 0 0 10px var(--hud-cyan);
+    cursor: grab;
+    pointer-events: none;
+    transition: transform 0.05s ease-out;
+}
+
+/* 点动微调方向键盘 */
+.jog-dpad-card {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.step-selector {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+}
+
+.step-label {
+    color: var(--text-muted);
+}
+
+.step-btn {
+    background: rgba(30, 41, 59, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-family: var(--font-mono);
+    cursor: pointer;
+}
+
+.step-btn.active {
+    background: rgba(0, 243, 255, 0.25);
+    border-color: var(--hud-cyan);
+    color: var(--hud-cyan);
+    font-weight: bold;
+}
+
+.dpad-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    max-width: 180px;
+    margin: 0 auto;
+}
+
+.dpad-btn {
+    height: 32px;
+    background: rgba(30, 41, 59, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+}
+
+.dpad-btn:hover {
+    background: rgba(0, 243, 255, 0.25);
+    border-color: var(--hud-cyan);
+    color: #ffffff;
+    box-shadow: 0 0 8px rgba(0, 243, 255, 0.4);
+}
+
+.dpad-btn:active {
+    transform: scale(0.92);
+}
+
+.dpad-btn.center-btn {
+    background: rgba(0, 255, 157, 0.15);
+    border-color: rgba(0, 255, 157, 0.3);
+    color: var(--hud-green);
+}
+
+/* 战术动作按键栏 */
+.action-buttons-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-top: auto;
+}
+
+.hud-btn {
+    height: 38px;
+    background: rgba(30, 41, 59, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 5px;
+    color: #ffffff;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+
+.hud-btn:hover {
+    filter: brightness(1.2);
+}
+
+.hud-btn:active {
+    transform: scale(0.96);
+}
+
+.btn-mode {
+    border-color: rgba(0, 243, 255, 0.4);
+}
+
+.btn-mode.mode-manual {
+    background: rgba(255, 170, 0, 0.2);
+    border-color: var(--hud-amber);
+    color: var(--hud-amber);
+}
+
+.btn-laser {
+    border-color: rgba(255, 51, 68, 0.4);
+}
+
+.btn-laser.laser-active {
+    background: rgba(255, 51, 68, 0.3);
+    border-color: var(--hud-red);
+    color: #ffffff;
+    box-shadow: var(--glow-red);
+    animation: pulse-border 1.2s infinite;
+}
+
+@keyframes pulse-border {
+    0%, 100% { border-color: var(--hud-red); }
+    50% { border-color: #ffffff; }
+}
+
+.btn-center {
+    border-color: rgba(0, 255, 157, 0.4);
+}
+
+.btn-reset {
+    border-color: rgba(148, 163, 184, 0.4);
+}
+
+/* ── 视口 4: 遥测数据卡片与指标 (Telemetry View) ─────────────────────────── */
+.telemetry-panel {
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+
+.metric-card {
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 5px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.metric-label {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+}
+
+.metric-value {
+    font-size: 16px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: #ffffff;
+}
+
+.metric-sub {
+    font-size: 9px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+}
+
+.text-cyan { color: var(--hud-cyan); }
+.text-green { color: var(--hud-green); }
+.text-amber { color: var(--hud-amber); }
+.text-blue { color: var(--hud-blue); }
+.text-gray { color: var(--text-muted); }
+
+.badge-state {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    width: fit-content;
+    font-size: 12px;
+}
+
+.state-idle {
+    background: rgba(148, 163, 184, 0.2);
+    color: #94a3b8;
+    border: 1px solid rgba(148, 163, 184, 0.4);
+}
+
+.state-turn_once {
+    background: rgba(255, 170, 0, 0.2);
+    color: var(--hud-amber);
+    border: 1px solid var(--hud-amber);
+    box-shadow: 0 0 8px rgba(255, 170, 0, 0.4);
+}
+
+.state-follow {
+    background: rgba(0, 255, 157, 0.2);
+    color: var(--hud-green);
+    border: 1px solid var(--hud-green);
+    box-shadow: var(--glow-green);
+}
+
+/* 参数热更抽屉 */
+.param-tuner-card {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 5px;
+    padding: 8px 12px;
+    font-size: 11px;
+}
+
+.tuner-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.tuner-title {
+    font-weight: 600;
+    color: var(--hud-cyan);
+    font-family: var(--font-mono);
+}
+
+.tuner-toggle-btn {
+    background: transparent;
+    border: 1px solid rgba(0, 243, 255, 0.3);
+    color: var(--hud-cyan);
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    cursor: pointer;
+}
+
+.tuner-body {
+    padding-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.slider-row {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+}
+
+.slider-row input[type="range"] {
+    accent-color: var(--hud-cyan);
+    height: 4px;
+}
+
+.tuner-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 6px;
+}
+
+.btn-apply {
+    background: rgba(0, 255, 157, 0.2);
+    border-color: var(--hud-green);
+    color: var(--hud-green);
+    height: 28px;
+    padding: 0 12px;
+}
+
+.btn-refresh {
+    height: 28px;
+    padding: 0 12px;
+}
+
+.apply-status {
+    font-size: 11px;
+    font-family: var(--font-mono);
+}
+
+/* ── 视口 4: 终端滚动日志控制台 (Terminal Logs) ─────────────────────────── */
+.terminal-card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: rgba(10, 14, 20, 0.95);
+    border-top: 1px solid var(--panel-border);
+    min-height: 140px;
+    overflow: hidden;
+}
+
+.terminal-header {
+    height: 30px;
+    background: rgba(15, 23, 42, 0.9);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 10px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+}
+
+.terminal-title {
+    color: var(--hud-green);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.terminal-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.filter-group {
+    display: flex;
+    gap: 3px;
+}
+
+.filter-btn {
+    background: rgba(30, 41, 59, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-muted);
+    font-size: 9px;
+    font-family: var(--font-mono);
+    padding: 1px 6px;
+    border-radius: 2px;
+    cursor: pointer;
+}
+
+.filter-btn.active {
+    background: rgba(0, 243, 255, 0.25);
+    border-color: var(--hud-cyan);
+    color: #ffffff;
+}
+
+.term-btn {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: var(--text-muted);
+    font-size: 9px;
+    font-family: var(--font-mono);
+    padding: 1px 6px;
+    border-radius: 2px;
+    cursor: pointer;
+}
+
+.term-btn:hover {
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.terminal-body {
+    flex: 1;
+    padding: 8px 10px;
+    overflow-y: auto;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.5;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.log-entry {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    word-break: break-all;
+}
+
+.log-time {
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.log-badge {
+    padding: 0 4px;
+    border-radius: 2px;
+    font-size: 9px;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+.badge-info {
+    background: rgba(0, 255, 157, 0.15);
+    color: var(--hud-green);
+}
+
+.badge-warn, .badge-warning {
+    background: rgba(255, 170, 0, 0.2);
+    color: var(--hud-amber);
+}
+
+.badge-error {
+    background: rgba(255, 51, 68, 0.25);
+    color: var(--hud-red);
+}
+
+.badge-debug {
+    background: rgba(56, 189, 248, 0.15);
+    color: var(--hud-blue);
+}
+
+.log-logger {
+    color: var(--hud-cyan);
+    flex-shrink: 0;
+}
+
+.log-msg {
+    color: var(--text-primary);
+}
+
+.log-warning .log-msg {
+    color: var(--hud-amber);
+}
+
+.log-error .log-msg {
+    color: var(--hud-red);
+    font-weight: bold;
+}

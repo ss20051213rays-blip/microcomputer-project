@@ -40,3 +40,6 @@ wheels/
 .installed.cfg
 *.egg
 .pytest_cache/
+
+# Agent 本地元数据
+.agent-teams/

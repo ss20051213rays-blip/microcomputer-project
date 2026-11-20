@@ -57,7 +57,7 @@ servo:
   driver_type: "bus"              # "bus"（推荐：微雪通用型总线舵机驱动板） | "pwm"（旧版 GPIO 18 SG90 兼容）
 
   # 串行总线舵机配置 (Waveshare Bus Servo / ST3215 / SC15)
-  serial_port: "/dev/ttyUSB0"     # 微雪驱动板 USB/串口连接端（或树莓派 /dev/ttyAMA0）
+  serial_port: "/dev/ttyACM0"     # 微雪驱动板 USB/串口连接端（或树莓派 /dev/ttyAMA0）
   baudrate: 1000000               # 总线通信波特率：标准 1000000 (1Mbps) 或 115200
   yaw_id: 1                       # 水平偏航舵机 ID
   pitch_id: 2                     # 垂直俯仰舵机 ID
@@ -139,3 +139,13 @@ logging:
     - theta_cmd_pitch
     - fps
     - event
+
+# ── Web HUD 监视中心与通信服务（M7 拓展）──────────────────────────────────
+web:
+  enabled: true                   # 是否启动 Web 运行时适配器
+  host: "0.0.0.0"                 # 监听地址（0.0.0.0 允许局域网/千兆网口访问）
+  port: 8080                      # Web 端口
+  telemetry_hz: 20                # SSE 遥测推流频率 (Hz)
+  mjpeg_fps: 30                   # MJPEG 视频推流帧率上限 (FPS)
+  mjpeg_quality: 75               # JPEG 图像压缩质量 (1~100)
+  cors_enabled: true              # 跨域支持

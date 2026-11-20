@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>视听融合声源定位与目标跟踪两轴云台系统 · 战术 HUD 监控中心</title>
+    <link rel="stylesheet" href="/static/css/hud.css">
+    <link rel="stylesheet" href="/static/css/components.css">
+</head>
+<body>
+    <!-- 顶部战术导航栏 -->
+    <header class="hud-header">
+        <div class="header-brand">
+            <span class="brand-icon">🎯</span>
+            <span class="brand-title">视听融合智能跟踪云台 · TACTICAL HUD</span>
+            <span class="brand-tag">M7 COCKPIT</span>
+        </div>
+        <div class="header-meta">
+            <span class="header-badge badge-connecting" id="header-conn-status">CONNECTING...</span>
+        </div>
+        <div class="header-controls">
+            <button class="btn-sm" id="btn-toggle-stream-hud">流模式: 原始RAW</button>
+            <button class="btn-sm active" id="btn-toggle-sound">音效: ON</button>
+            <button class="btn-sm" id="header-btn-center">快速归中</button>
+        </div>
+    </header>
+
+    <!-- 四象限战术座舱核心网格 -->
+    <main class="cockpit-grid">
+        <!-- 视口 1: 实况战术 HUD 视频视口 -->
+        <section class="cockpit-panel" id="panel-video">
+            <div class="panel-title-bar">
+                <div class="panel-title-left">
+                    <span class="indicator-dot"></span>
+                    <span>【视口 1】实况战术 HUD 视频视口 (LIVE TACTICAL HUD)</span>
+                </div>
+                <span class="panel-badge">OV9281 120FPS</span>
+            </div>
+            <div class="panel-content video-hud-wrapper">
+                <img id="video-stream-img" class="video-stream" src="/api/stream/video?raw=1" alt="Live Camera Video Stream">
+                <canvas id="hud-canvas" class="hud-overlay-canvas"></canvas>
+            </div>
+        </section>
+
+        <!-- 视口 2: 空间声学极坐标雷达 -->
+        <section class="cockpit-panel" id="panel-radar">
+            <div class="panel-title-bar">
+                <div class="panel-title-left">
+                    <span class="indicator-dot"></span>
+                    <span>【视口 2】空间声学定位雷达 (SPATIAL ACOUSTIC RADAR)</span>
+                </div>
+                <span class="panel-badge">WM8960 GCC-PHAT</span>
+            </div>
+            <div class="panel-content radar-wrapper">
+                <canvas id="radar-canvas" class="radar-canvas"></canvas>
+            </div>
+        </section>
+
+        <!-- 视口 3: 两轴云台控制台与仪表盘 -->
+        <section class="cockpit-panel" id="panel-gimbal">
+            <div class="panel-title-bar">
+                <div class="panel-title-left">
+                    <span class="indicator-dot"></span>
+                    <span>【视口 3】两轴云台控制台与仪表 (2-DOF GIMBAL COCKPIT)</span>
+                </div>
+                <span class="panel-badge">BUS SERVO / PWM</span>
+            </div>
+            <div class="panel-content" id="viewport-gimbal">
+                <!-- 由 js/gimbal_widget.js 挂载 -->
+            </div>
+        </section>
+
+        <!-- 视口 4: 系统遥测大屏与终端控制台日志 -->
+        <section class="cockpit-panel" id="panel-telemetry-logs">
+            <div class="panel-title-bar">
+                <div class="panel-title-left">
+                    <span class="indicator-dot"></span>
+                    <span>【视口 4】全系统遥测与实时终端 (TELEMETRY & LOGS)</span>
+                </div>
+                <span class="panel-badge">REAL-TIME SSE</span>
+            </div>
+            <div class="panel-content" style="display: flex; flex-direction: column;">
+                <div id="viewport-telemetry">
+                    <!-- 由 js/telemetry_view.js 挂载 -->
+                </div>
+                <div id="viewport-terminal" style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
+                    <!-- 由 js/terminal_logs.js 挂载 -->
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 原生 ES6 模块入口 -->
+    <script type="module" src="/static/js/app.js"></script>
+</body>
+</html>

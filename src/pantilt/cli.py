@@ -20,6 +20,25 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="配置文件路径")
     parser.add_argument("--dry-run", action="store_true", help="无硬件干运行模式")
     parser.add_argument("--simulate", action="store_true", help="执行自动化确定性模拟验收测试")
+    parser.add_argument(
+        "--web",
+        dest="web",
+        action="store_true",
+        default=None,
+        help="启动 Web 前端监控中心与控制服务",
+    )
+    parser.add_argument(
+        "--no-web",
+        dest="web",
+        action="store_false",
+        help="显式禁用 Web 前端服务",
+    )
+    parser.add_argument(
+        "--web-port",
+        type=int,
+        default=None,
+        help="覆盖 Web 监听端口 (默认读取配置文件: 8080)",
+    )
     return parser.parse_args(args)
 
 
@@ -34,7 +53,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         success = run_simulation_test(config)
         return 0 if success else 1
 
-    app = create_app(config, dry_run=args.dry_run)
+    app = create_app(
+        config,
+        dry_run=args.dry_run,
+        web=args.web,
+        web_port=args.web_port,
+    )
 
     def sig_handler(signum, frame):
         logger.info(f"收到系统信号 {signum}，正在安全退出...")

@@ -41,6 +41,7 @@ class AudioPipeline:
         self.running = False
         self.process_thread = None
         self.last_event_time = 0.0
+        self.latest_rms = 0.0
         
     def _audio_callback(self, indata, frames, time_info, status):
         """音频硬件采集回调（极轻量），只负责拷贝数据"""
@@ -108,6 +109,7 @@ class AudioPipeline:
             # 1. 计算 RMS (声音能量)
             block_float = block.astype(np.float32) / 32768.0
             rms = np.sqrt(np.mean(block_float**2))
+            self.latest_rms = float(rms)
             
             # 2. SED 触发逻辑 (带死区锁存防抖)
             if rms > self.energy_threshold:

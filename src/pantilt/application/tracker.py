@@ -1,7 +1,7 @@
 """视听融合声源定位与目标跟踪应用控制流程。"""
 import logging
 import time
-from typing import Optional
+from typing import Any, Optional
 
 from pantilt.adapters.actuation.laser import LaserIndicator
 from pantilt.adapters.actuation.servo import ServoController
@@ -30,8 +30,10 @@ class PanTiltTrackerApp:
         laser: LaserIndicator,
         state_machine: TrackerStateMachine,
         console: Optional[ConsoleListener] = None,
+        web: Optional[Any] = None,
         main_loop_hz: int = 30,
         heartbeat_interval_s: float = 2.0,
+        dry_run: bool = False,
     ):
         self.servo = servo
         self.audio = audio
@@ -40,11 +42,15 @@ class PanTiltTrackerApp:
         self.laser = laser
         self.state_machine = state_machine
         self.console = console
+        self.web = web
 
         self.main_loop_hz = main_loop_hz
         self.heartbeat_interval_s = heartbeat_interval_s
+        self.dry_run = dry_run
 
         self.running = False
+        self.start_mono = 0.0
+        self.control_mode = "AUTO"
         self.last_heartbeat_mono = 0.0
         self.last_audio_event: Optional[AudioEvent] = None
         self.last_vision_obs: Optional[VisionObservation] = None
@@ -70,6 +76,22 @@ class PanTiltTrackerApp:
         self.servo.center()
         self.state_machine.reset(time.monotonic())
 
+    def center(self):
+        """双轴安全归中并重置状态机与激光指示。"""
+        self._handle_console_center()
+
+    def set_control_mode(self, mode: str):
+        """设置运行模式: AUTO | MANUAL | CALIBRATION。"""
+        mode = mode.upper()
+        if mode not in ("AUTO", "MANUAL", "CALIBRATION"):
+            raise ValueError(f"不支持的运行模式: {mode}")
+        prev_mode = self.control_mode
+        self.control_mode = mode
+        if mode == "AUTO" and prev_mode != "AUTO":
+            self.laser.reset()
+            self.state_machine.reset(time.monotonic())
+        logger.info(f"系统运行模式已切换: {prev_mode} -> {mode}")
+
     def start(self) -> bool:
         """启动各子系统并准备进入主控循环。"""
         logger.info("正在启动云台主控系统...")
@@ -86,10 +108,13 @@ class PanTiltTrackerApp:
         self.servo.center()
         self.running = True
         now = time.monotonic()
+        self.start_mono = now
         self.state_machine.reset(now)
         self.last_heartbeat_mono = now
         if self.console:
             self.console.start()
+        if self.web:
+            self.web.start()
         logger.info("云台系统启动成功，当前状态: IDLE (监听环境中...)")
         return True
 
@@ -101,6 +126,11 @@ class PanTiltTrackerApp:
         self.running = False
         if self.console:
             self.console.stop()
+        if self.web:
+            try:
+                self.web.stop()
+            except Exception as e:
+                logger.error(f"停止 Web 适配器异常: {e}")
 
         try:
             self.laser.disable()
@@ -155,7 +185,11 @@ class PanTiltTrackerApp:
         if obs:
             self.last_vision_obs = obs
 
-        # 3. 状态机演进
+        # 3. 若处于 MANUAL 模式，跳过自主伺服与激光下发，保持人工接管
+        if getattr(self, "control_mode", "AUTO") == "MANUAL":
+            return
+
+        # 4. 状态机演进
         res = self.state_machine.step(
             now=now,
             audio_event=audio_ev,
@@ -164,7 +198,7 @@ class PanTiltTrackerApp:
             controller=self.controller,
         )
 
-        # 4. 执行决策
+        # 5. 执行决策
         if res.drain_audio:
             while self.audio.get_latest_event(block=False):
                 pass

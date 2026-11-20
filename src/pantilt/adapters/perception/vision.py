@@ -311,6 +311,12 @@ class VisionPipeline:
                         )
             time.sleep(1.0 / (self.fps * 1.5))
 
+    def get_latest_frame(self):
+        """获取最新原始图像帧（用于视频推流与本地监视）。"""
+        if self.capture:
+            return self.capture.get_latest_frame()
+        return None
+
     def get_latest_observation(self) -> VisionObservation:
         with self.lock:
             if self._mock_obs is not None:
