@@ -33,14 +33,16 @@ class ServoController:
         # 俯仰 (Pitch) 角度状态
         self.current_pitch = 0.0
 
-        # 限位与方向参数
+        # 限位、方向与软件零位偏置参数
         self.min_yaw = float(self.config.get("min_yaw_angle", self.config.get("min_angle", -90.0)))
         self.max_yaw = float(self.config.get("max_yaw_angle", self.config.get("max_angle", 90.0)))
         self.yaw_sign = int(self.config.get("yaw_sign", self.config.get("servo_sign", 1)))
+        self.yaw_offset_deg = float(self.config.get("yaw_offset_deg", 0.0))
 
         self.min_pitch = float(self.config.get("min_pitch_angle", -30.0))
         self.max_pitch = float(self.config.get("max_pitch_angle", 45.0))
         self.pitch_sign = int(self.config.get("pitch_sign", 1))
+        self.pitch_offset_deg = float(self.config.get("pitch_offset_deg", 0.0))
 
         # 保持旧属性兼容
         self.min_angle = self.min_yaw
@@ -55,7 +57,10 @@ class ServoController:
 
         # 串行总线参数（用于 bus 驱动模式）
         self.serial_port = self.config.get("serial_port", "/dev/ttyUSB0")
-        self.baudrate = self.config.get("baudrate", 1000000)
+        self.baudrate = self.config.get("baudrate", 115200)
+        # 该半双工总线适配器必须拉高 RTS 才能稳定接收舵机应答，
+        # 否则应答丢包率极高（实测 115200bps 下不拉高 RTS 仅 1/12~7/12 命中）。
+        self.serial_rts = bool(self.config.get("serial_rts", True))
         self.yaw_id = self.config.get("yaw_id", 1)
         self.pitch_id = self.config.get("pitch_id", 2)
 
@@ -72,7 +77,12 @@ class ServoController:
             else:
                 try:
                     self.ser = serial.Serial(self.serial_port, self.baudrate, timeout=0.05)
-                    logger.info(f"微雪串行总线舵机驱动已连接: {self.serial_port} @ {self.baudrate}bps (Yaw ID={self.yaw_id}, Pitch ID={self.pitch_id})")
+                    # 半双工总线方向控制：RTS 拉高 = 允许接收，DTR 保持低电平
+                    self.ser.rts = self.serial_rts
+                    self.ser.dtr = False
+                    time.sleep(0.3)  # 等待总线上电稳定，过早发包会丢应答
+                    logger.info(f"微雪串行总线舵机驱动已连接: {self.serial_port} @ {self.baudrate}bps "
+                                f"(Yaw ID={self.yaw_id}, Pitch ID={self.pitch_id}, RTS={self.serial_rts})")
                 except Exception as e:
                     logger.warning(f"无法打开总线舵机串口 {self.serial_port}: {e}，转入脱机模拟模式。")
                     self.ser = None
@@ -119,7 +129,12 @@ class ServoController:
         packet.append(checksum)
 
         try:
+            self.ser.reset_input_buffer()
             self.ser.write(bytes(packet))
+            self.ser.flush()
+            # 半双工单线总线：留出舵机 6 字节应答与适配器切换时间，防止连发双轴指令撞包
+            time.sleep(0.015)
+            self.ser.reset_input_buffer()
         except Exception as e:
             logger.error(f"总线舵机发送指令失败: {e}")
 
@@ -135,7 +150,11 @@ class ServoController:
         checksum = (~(sum(packet[2:]) & 0xFF)) & 0xFF
         packet.append(checksum)
         try:
+            self.ser.reset_input_buffer()
             self.ser.write(bytes(packet))
+            self.ser.flush()
+            time.sleep(0.015)
+            self.ser.reset_input_buffer()
         except Exception as e:
             logger.error(f"总线舵机设置扭矩失败: {e}")
 
@@ -187,9 +206,9 @@ class ServoController:
         if not self.dry_run:
             if self.driver_type == "bus" and self.ser:
                 if yaw is not None:
-                    self._send_bus_pos(self.yaw_id, self.current_yaw * self.yaw_sign)
+                    self._send_bus_pos(self.yaw_id, (self.current_yaw + self.yaw_offset_deg) * self.yaw_sign)
                 if pitch is not None:
-                    self._send_bus_pos(self.pitch_id, self.current_pitch * self.pitch_sign)
+                    self._send_bus_pos(self.pitch_id, (self.current_pitch + self.pitch_offset_deg) * self.pitch_sign)
             elif self.driver_type == "pwm" and self.pi and yaw is not None:
                 pulse = self._angle_to_pulse(self.current_yaw)
                 self.pi.set_servo_pulsewidth(self.gpio, pulse)
