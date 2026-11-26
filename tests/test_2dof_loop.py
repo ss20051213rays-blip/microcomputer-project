@@ -1,118 +1,89 @@
-"""二维总线云台与激光瞄准联动脱机确定性验收测试 (2-DOF)。"""
+"""阶段 4 四态状态机与 2-DOF 云台脱机联调测试。"""
 import time
 
+from pantilt.adapters.actuation import servo as servo_module
+from pantilt.adapters.actuation.servo import ServoController
 from pantilt.bootstrap import create_app
 from pantilt.domain.types import AudioEvent, SystemState, VisionObservation
 from pantilt.infrastructure.config import load_config
-from pantilt.infrastructure.logging_setup import setup_logger
 from pantilt.infrastructure.paths import DEFAULT_CONFIG
 
 
-def test_2dof_tracking_and_laser_interlock():
-    """验证 2-DOF 双轴闭环与激光安全联锁完整链路。"""
-    config = load_config(DEFAULT_CONFIG)
-    app = create_app(config, dry_run=True)
+def test_2dof_face_tracking_state_flow():
+    app = create_app(load_config(DEFAULT_CONFIG), dry_run=True, web=False)
     assert app.start()
-
     try:
         now = time.monotonic()
-
-        # 1. 验证双轴初始状态
         assert app.state == SystemState.IDLE
+        assert not app.vision._tracking_active
+        assert app.servo.get_angles() == (0.0, 0.0)
+        assert not hasattr(app, "laser")
+
+        app.audio.event_queue.put(AudioEvent(now, 25.0, "right", 0.9, "test"))
+        app.tick(now)
+        assert app.state == SystemState.TURN_AND_RESPOND
+        assert app.vision._tracking_active
+        assert app.servo.current_yaw == 25.0
+        assert app.servo.current_pitch == 30.0
+
+        app.tick(now + 0.01)
+        now += app.turn_settle_s + 0.02
+        app.tick(now)
+        assert app.state == SystemState.SEARCH_FACE
+
+        # 寻脸到位即切 TRACK_FACE，并对水平/垂直误差同时作比例跟随。
+        obs = VisionObservation(now, True, 80.0, (360, 160, 70, 70), 0.95, 20.0, dy_px=-50.0)
+        app.vision.set_mock_observation(obs)
+        app.tick(now)
+        assert app.state == SystemState.TRACK_FACE
         yaw, pitch = app.servo.get_angles()
-        assert abs(yaw - 0.0) < 1e-3 and abs(pitch - 0.0) < 1e-3
-        assert not app.laser_is_on
+        assert yaw > 25.0
+        assert pitch > 0.0
 
-        # 2. 模拟声学开环转向 (右偏 30度)
-        clap = AudioEvent(now, 30.0, "right", 0.9, "gcc_phat")
-        app.audio.event_queue.put(clap)
+        # 丢脸后不回中，恢复入画后继续跟随。
+        held = app.servo.get_angles()
+        lost_at = now + 4.0
+        missing = VisionObservation(lost_at, False, 0, (0, 0, 0, 0), 0, 20)
+        app.vision.set_mock_observation(missing)
+        app.tick(lost_at)
+        assert app.state == SystemState.TRACK_FACE
+        assert app.servo.get_angles() == held
+
+        now = lost_at + 0.05
+        app.vision.set_mock_observation(VisionObservation(now, True, -70, (150, 160, 70, 70),
+                                                         0.95, 20.0, dy_px=35.0))
         app.tick(now)
-        assert app.state == SystemState.TURN_ONCE
-        assert abs(app.servo.current_yaw - 30.0) < 1e-3
-
-        # 3. 转向到位平息后切入 FOLLOW
-        app.tick(now)
-        now += app.turn_settle_s + 0.05
-        app.tick(now)
-        assert app.state == SystemState.FOLLOW
-
-        # 4. 注入 2-DOF 视觉偏差 (dx=-50px 偏左, dy=-40px 偏上)
-        obs_move = VisionObservation(
-            timestamp_mono=now,
-            face_found=True,
-            dx_px=-50.0,
-            bbox=(100, 80, 60, 60),
-            confidence=1.0,
-            fps=120.0,
-            dy_px=-40.0,
-            target_id=10,
-        )
-        app.vision.set_mock_observation(obs_move)
-        app.tick(now)
-
-        yaw, pitch = app.servo.get_angles()
-        assert abs(yaw - 28.0) < 1e-3
-        assert abs(pitch - 1.5) < 1e-3
-        assert not app.laser_is_on
-
-        # 5. 注入死区内观测 (dx=5px, dy=3px)，模拟连续 3 帧锁定
-        obs_lock = VisionObservation(
-            timestamp_mono=now,
-            face_found=True,
-            dx_px=5.0,
-            bbox=(315, 195, 60, 60),
-            confidence=1.0,
-            fps=120.0,
-            dy_px=3.0,
-            target_id=10,
-        )
-        app.vision.set_mock_observation(obs_lock)
-        for _ in range(3):
-            now = time.monotonic()
-            app.tick(now)
-
-        assert app.laser_is_on
-
-        # 6. 目标脱靶/丢失，模拟超时回中与激光熄灭
-        obs_lost = VisionObservation(
-            timestamp_mono=now,
-            face_found=False,
-            dx_px=0.0,
-            bbox=(0, 0, 0, 0),
-            confidence=0.0,
-            fps=120.0,
-        )
-        app.vision.set_mock_observation(obs_lost)
-        now += app.lost_timeout_s + 0.5
-        app.tick(now)
-        assert app.state == SystemState.IDLE
-        assert not app.laser_is_on
-        yaw, pitch = app.servo.get_angles()
-        assert abs(yaw - 0.0) < 1e-3 and abs(pitch - 0.0) < 1e-3
+        assert app.servo.current_yaw < held[0]
+        assert app.servo.current_pitch < held[1]
     finally:
         app.stop()
 
 
-def main():
-    config = load_config(DEFAULT_CONFIG)
-    setup_logger(config)
+def test_bus_tracking_limits_speed_and_skips_repeated_position(monkeypatch):
+    frames = []
 
-    print("\n==================================================")
-    print("      二维总线云台与激光指示脱机闭环测试 (2-DOF)      ")
-    print("==================================================")
+    class FakeSerial:
+        def reset_input_buffer(self):
+            pass
 
-    test_2dof_tracking_and_laser_interlock()
+        def write(self, packet):
+            frames.append(packet)
 
-    print("\n----------------- 验收结果详情 -----------------")
-    print("  ✅ 测试项 1: 双轴冷启动成功，Yaw/Pitch 归中 (0°, 0°)，激光关闭")
-    print("  ✅ 测试项 2: 声学事件开环驱动偏航转向 +30.0°")
-    print("  ✅ 测试项 3: 转向平息完成，切入 FOLLOW 状态")
-    print("  ✅ 测试项 4: 2-DOF 视觉偏差联动步进成功 (Yaw: 30°->28°, Pitch: 0°->1.5°)")
-    print("  ✅ 测试项 5: 目标连续稳定在两轴死区准星内，50mW 激光器成功触发点亮！")
-    print("  ✅ 测试项 6: 目标丢失超时，激光安全熄灭且两轴安全归中 (0°, 0°)")
-    print("--------------------------------------------------")
-    print("🎉 恭喜！二维总线云台与激光指示 6 项脱机测试 100% 通过！\n")
+        def flush(self):
+            pass
 
+    monkeypatch.setattr(servo_module.time, "sleep", lambda _delay: None)
+    servo = ServoController({"driver_type": "bus", "max_yaw_angle": 1.0}, dry_run=True)
+    servo.dry_run = False
+    servo.ser = FakeSerial()
+    servo.center()
+    assert [int.from_bytes(frame[10:12], "little") for frame in frames] == [0, 0]
+    frames.clear()
 
-if __name__ == "__main__":
-    main()
+    servo.step(0.01, period_s=1 / 30)
+    assert frames == []  # 子刻度命令留在软件角度中，避免重发相同位置
+    servo.step(0.99, period_s=1 / 30)
+    servo.step(0.50, period_s=1 / 30)
+    assert len(frames) == 1  # 只写水平轴，到限位后不重复发送
+    assert frames[0][2] == servo.yaw_id
+    assert int.from_bytes(frames[0][10:12], "little") == 338

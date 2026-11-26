@@ -3,7 +3,6 @@ import logging
 import time
 from typing import Any, Optional
 
-from pantilt.adapters.actuation.laser import LaserIndicator
 from pantilt.adapters.actuation.servo import ServoController
 from pantilt.adapters.perception.audio import AudioPipeline
 from pantilt.adapters.perception.vision import VisionPipeline
@@ -27,7 +26,6 @@ class PanTiltTrackerApp:
         audio: AudioPipeline,
         vision: VisionPipeline,
         controller: DeadzoneStepController,
-        laser: LaserIndicator,
         state_machine: TrackerStateMachine,
         console: Optional[ConsoleListener] = None,
         web: Optional[Any] = None,
@@ -39,7 +37,6 @@ class PanTiltTrackerApp:
         self.audio = audio
         self.vision = vision
         self.controller = controller
-        self.laser = laser
         self.state_machine = state_machine
         self.console = console
         self.web = web
@@ -60,10 +57,6 @@ class PanTiltTrackerApp:
         return self.state_machine.state
 
     @property
-    def laser_is_on(self) -> bool:
-        return self.laser.is_on
-
-    @property
     def turn_settle_s(self) -> float:
         return self.state_machine.turn_settle_s
 
@@ -72,12 +65,12 @@ class PanTiltTrackerApp:
         return self.state_machine.lost_timeout_s
 
     def _handle_console_center(self):
-        self.laser.reset()
         self.servo.center()
+        self.controller.reset()
         self.state_machine.reset(time.monotonic())
 
     def center(self):
-        """双轴安全归中并重置状态机与激光指示。"""
+        """双轴安全归中并重置状态机。"""
         self._handle_console_center()
 
     def set_control_mode(self, mode: str):
@@ -88,7 +81,7 @@ class PanTiltTrackerApp:
         prev_mode = self.control_mode
         self.control_mode = mode
         if mode == "AUTO" and prev_mode != "AUTO":
-            self.laser.reset()
+            self.controller.reset()
             self.state_machine.reset(time.monotonic())
         logger.info(f"系统运行模式已切换: {prev_mode} -> {mode}")
 
@@ -100,6 +93,7 @@ class PanTiltTrackerApp:
             self.stop()
             return False
 
+        self.vision.set_tracking_active(False)
         if not self.vision.start():
             logger.error("视觉管线启动失败，系统安全退出。")
             self.stop()
@@ -109,6 +103,7 @@ class PanTiltTrackerApp:
         self.running = True
         now = time.monotonic()
         self.start_mono = now
+        self.controller.reset()
         self.state_machine.reset(now)
         self.last_heartbeat_mono = now
         if self.console:
@@ -119,7 +114,7 @@ class PanTiltTrackerApp:
         return True
 
     def stop(self):
-        """按规范顺序安全停机：熄灭激光 -> 停视觉 -> 停音频 -> 舵机回中释放。"""
+        """安全停机：停止运行时适配器与感知管线，舵机回中并释放扭矩。"""
         if not self.running and not self.audio.running and not self.vision.running:
             return
         logger.info("正在安全停止系统...")
@@ -131,11 +126,6 @@ class PanTiltTrackerApp:
                 self.web.stop()
             except Exception as e:
                 logger.error(f"停止 Web 适配器异常: {e}")
-
-        try:
-            self.laser.disable()
-        except Exception as e:
-            logger.error(f"关闭激光器异常: {e}")
 
         try:
             self.vision.stop()
@@ -185,8 +175,9 @@ class PanTiltTrackerApp:
         if obs:
             self.last_vision_obs = obs
 
-        # 3. 若处于 MANUAL 模式，跳过自主伺服与激光下发，保持人工接管
+        # 3. 若处于 MANUAL 模式，跳过自主伺服下发，保持人工接管
         if getattr(self, "control_mode", "AUTO") == "MANUAL":
+            self.vision.set_tracking_active(False)
             return
 
         # 4. 状态机演进
@@ -195,23 +186,25 @@ class PanTiltTrackerApp:
             audio_event=audio_ev,
             vision_obs=obs,
             current_angle=self.servo.current_angle,
+            current_pitch=self.servo.current_pitch,
             controller=self.controller,
         )
+
+        self.vision.set_tracking_active(res.state != SystemState.IDLE)
 
         # 5. 执行决策
         if res.drain_audio:
             while self.audio.get_latest_event(block=False):
                 pass
 
-        if res.servo_action == "set_angle":
+        if res.servo_action == "set_angles":
+            self.servo.set_angles(yaw=res.target_angle, pitch=res.target_pitch_angle)
+        elif res.servo_action == "set_angle":
             self.servo.set_angle(res.target_angle)
         elif res.servo_action == "step":
-            self.servo.step(res.delta_yaw, res.delta_pitch)
+            self.servo.step(res.delta_yaw, res.delta_pitch, period_s=self.controller.period_s)
         elif res.servo_action == "center":
             self.servo.center()
-
-        if res.laser_enable is not None:
-            self.laser.set_laser(res.laser_enable, now)
 
     def run(self) -> int:
         """主循环执行体。"""

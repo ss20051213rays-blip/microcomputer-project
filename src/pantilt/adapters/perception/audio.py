@@ -2,6 +2,8 @@ import time
 import queue
 import logging
 import threading
+from dataclasses import dataclass
+from typing import Optional
 import numpy as np
 
 try:
@@ -12,6 +14,18 @@ except ImportError:
 from pantilt.domain.types import AudioEvent
 
 logger = logging.getLogger("App")
+
+
+@dataclass(frozen=True)
+class SpeechDirection:
+    angle_deg: Optional[float]
+    delay_s: Optional[float]
+    side: str
+    confidence: float
+    method: str
+    voiced_frames: int
+    agreeing_frames: int
+
 
 class AudioPipeline:
     def __init__(self, config_audio, dry_run=False):
@@ -141,8 +155,8 @@ class AudioPipeline:
                         
                     logger.debug(f"[Audio Trigger] {side} {theta:.1f}° (Conf: {conf:.2f}, {method}, RMS: {rms:.3f})")
                     
-    def _compute_doa(self, ch0, ch1, max_tau):
-        """实现 GCC-PHAT 测向，并在异常时降级为能量差测向"""
+    def _gcc_phat(self, ch0, ch1, max_tau, band=None):
+        """返回亚采样时延和归一化相关峰。"""
         N = len(ch0)
         # 加窗防止频谱泄露
         window = np.hanning(N)
@@ -159,7 +173,13 @@ class AudioPipeline:
         mag = np.abs(R)
         mag[mag < 1e-8] = 1e-8
         R /= mag  # PHAT 权重加权
-        
+        peak_scale = 1.0
+        if band is not None:
+            frequencies = np.fft.rfftfreq(N_fft, d=1 / self.fs)
+            in_band = (frequencies >= band[0]) & (frequencies <= band[1])
+            R[~in_band] = 0
+            peak_scale = 2 * np.count_nonzero(in_band) / N_fft
+
         # IFFT 回到时域
         cc = np.fft.irfft(R, n=N_fft)
         
@@ -168,7 +188,7 @@ class AudioPipeline:
         cc_shifted = np.concatenate((cc[-max_shift:], cc[:max_shift+1]))
         
         peak_idx = int(np.argmax(cc_shifted))
-        confidence = float(cc_shifted[peak_idx])
+        confidence = float(cc_shifted[peak_idx]) / peak_scale
         
         # 抛物线亚采样插值：短基线阵列的最大时延只有几个采样点，
         # 直接用整数 argmax 会把角度量化成台阶（16kHz/6.5cm 下 30° 附近一步跨约 10°）。
@@ -184,45 +204,80 @@ class AudioPipeline:
                 sub_offset = float(np.clip(sub_offset, -0.5, 0.5))
         
         shift = (peak_idx - max_shift) + sub_offset
-        
+        return shift / self.fs, confidence
+
+    def _angle_from_delay(self, tau):
+        val = tau * self.sound_speed / self.mic_spacing
+        return float(np.degrees(np.arcsin(np.clip(val, -1.0, 1.0)))) + self.audio_zero
+
+    @staticmethod
+    def _angle_side(theta):
+        if theta < -15.0:
+            return "left"
+        if theta > 15.0:
+            return "right"
+        return "center"
+
+    @staticmethod
+    def _energy_side(ch0, ch1):
+        diff = np.sqrt(np.mean(ch0**2)) - np.sqrt(np.mean(ch1**2))
+        if diff > 0.005:
+            return "left"
+        if diff < -0.005:
+            return "right"
+        return "center"
+
+    def _compute_doa(self, ch0, ch1, max_tau):
+        """实现 GCC-PHAT 测向，并在异常时降级为能量差测向"""
+        tau, confidence = self._gcc_phat(ch0, ch1, max_tau)
         # --- 降级模式检查 ---
         if confidence < self.gcc_conf_thresh:
-            rms0 = np.sqrt(np.mean(ch0**2))
-            rms1 = np.sqrt(np.mean(ch1**2))
-            diff = rms0 - rms1
-            # 通过能量差判断侧别（极粗糙定位）
-            if diff > 0.005:
-                side = "left"
-                theta = -self.fallback_angle
-            elif diff < -0.005:
-                side = "right"
-                theta = self.fallback_angle
-            else:
-                side = "center"
-                theta = 0.0
+            side = self._energy_side(ch0, ch1)
+            theta = {"left": -self.fallback_angle, "right": self.fallback_angle, "center": 0.0}[side]
             return theta + self.audio_zero, confidence, "energy_diff", side
-            
-        # --- 正常 GCC-PHAT 模式 ---
-        tau = shift / self.fs
-        val = tau * self.sound_speed / self.mic_spacing
-        
-        # 裁剪限制，防止 arcsin 无效域
-        val = np.clip(val, -1.0, 1.0)
-        theta_rad = np.arcsin(val)
-        theta_deg = np.degrees(theta_rad)
-        
-        # 注意：此处未绝对规定哪边为正，若方向反了请在 default.yaml 修改 audio_zero 或在 app 层适配。
-        # 默认假设：左负，右正。
-        theta = theta_deg + self.audio_zero
-        
-        if theta < -15.0:
-            side = "left"
-        elif theta > 15.0:
-            side = "right"
-        else:
-            side = "center"
-            
-        return float(theta), confidence, "gcc_phat", side
+
+        theta = self._angle_from_delay(tau)
+        return theta, confidence, "gcc_phat", self._angle_side(theta)
+
+    def estimate_speech_direction(self, stereo):
+        """对归一化立体声片段估计方位，保留时延和有效帧数供标定。"""
+        frame_size = round(self.fs * 0.064)
+        if stereo.ndim != 2 or stereo.shape[1] != 2 or len(stereo) < frame_size:
+            return SpeechDirection(None, None, "unknown", 0.0, "insufficient_audio", 0, 0)
+
+        band = (300, 3400)
+        frequencies = np.fft.rfftfreq(len(stereo), d=1 / self.fs)
+        spectrum = np.fft.rfft(stereo, axis=0)
+        spectrum[(frequencies < band[0]) | (frequencies > band[1])] = 0
+        speech = np.fft.irfft(spectrum, n=len(stereo), axis=0)
+        hop = frame_size // 2
+        frames = [speech[start:start + frame_size] for start in range(0, len(speech) - frame_size + 1, hop)]
+        levels = np.sqrt(np.mean(np.square(frames), axis=(1, 2)))
+        gate = max(0.0004, min(float(np.max(levels)) * 0.30, float(np.quantile(levels, 0.2)) * 2))
+        voiced = [frame for frame, level in zip(frames, levels) if level > gate]
+        if not voiced:
+            return SpeechDirection(None, None, "unknown", 0.0, "no_speech", 0, 0)
+
+        max_tau = self.mic_spacing / self.sound_speed
+        estimates = [self._gcc_phat(frame[:, 0], frame[:, 1], max_tau, band) for frame in voiced]
+        candidates = [(delay, peak) for delay, peak in estimates
+                      if peak >= self.gcc_conf_thresh and abs(delay) <= max_tau + 0.5 / self.fs]
+        agreeing = []
+        if candidates:
+            median_delay = np.median([delay for delay, _ in candidates])
+            agreeing = [(delay, peak) for delay, peak in candidates
+                        if abs(delay - median_delay) <= 0.5 / self.fs]
+        if len(agreeing) >= max(3, (len(voiced) + 1) // 2):
+            delay, confidence = np.median(agreeing, axis=0)
+            angle = self._angle_from_delay(delay)
+            return SpeechDirection(angle, float(delay), self._angle_side(angle), float(confidence),
+                                   "gcc_phat", len(voiced), len(agreeing))
+
+        speech_frames = np.concatenate(voiced, axis=0)
+        side = self._energy_side(speech_frames[:, 0], speech_frames[:, 1])
+        return SpeechDirection(None, None, side if side != "center" else "unknown",
+                               float(np.median([peak for _, peak in estimates])),
+                               "energy_diff", len(voiced), len(agreeing))
         
     def get_latest_event(self, block=False, timeout=None):
         """主控状态机获取最新拍手事件"""

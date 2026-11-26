@@ -5,15 +5,20 @@ from typing import Tuple
 
 
 class SystemState(str, Enum):
-    """视听融合云台运行状态机枚举。"""
+    """阶段 4 的四态视听跟踪流程。"""
     IDLE = "IDLE"
-    TURN_ONCE = "TURN_ONCE"
-    FOLLOW = "FOLLOW"
+    TURN_AND_RESPOND = "TURN_AND_RESPOND"
+    SEARCH_FACE = "SEARCH_FACE"
+    TRACK_FACE = "TRACK_FACE"
+
+    # 旧名称保留为 Enum alias，便于尚未迁移的外围调用代码平滑过渡。
+    TURN_ONCE = "TURN_AND_RESPOND"
+    FOLLOW = "TRACK_FACE"
 
 
 @dataclass
 class AudioEvent:
-    """声学事件检测与测向估计数据包。"""
+    """声学触发事件与测向估计数据包。"""
     timestamp_mono: float
     theta_audio_deg: float
     side: str          # "left", "right", "center"
@@ -30,14 +35,13 @@ class VisionObservation:
     bbox: Tuple[int, int, int, int]  # (x, y, w, h)
     confidence: float
     fps: float
-    dy_px: float = 0.0               # 俯仰垂直偏差 (像素)
-    target_id: int = -1              # 检出的目标 ID (如 ArUco 标记 ID)
+    dy_px: float = 0.0
+    target_id: int = -1
 
     @property
     def target_found(self) -> bool:
-        """目标存在别名（兼容 ArUco 靶标与人脸）。"""
+        """目标存在别名。"""
         return self.face_found
 
 
 __all__ = ["SystemState", "AudioEvent", "VisionObservation"]
-

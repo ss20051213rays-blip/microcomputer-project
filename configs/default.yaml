@@ -29,16 +29,20 @@ audio:
 
 # ── 相机与目标跟踪参数（M4: OV9281 120fps 全局快门 / ArUco / 人脸）────────────
 camera:
-  backend: "opencv"               # OV9281 UVC 免驱相机使用 OpenCV VideoCapture 取流
+  backend: "v4l2"                 # Linux Pi 优先 V4L2，避免 OpenCV GStreamer 自动回退抖动
   device_index: 0                 # /dev/video0 设备编号
   width: 640                      # 取流宽度（可设 1280x800 或 640x400 以降低算力）
   height: 400                     # 取流高度
-  detect_fps: 120                 # OV9281 支持最高 120 FPS
+  detect_fps: 120                 # 请求相机的传输帧率，实际值由 UVC 驱动协商
+  capture_output_fps: 30          # 软件限制解码和发布帧率，较旧的帧直接跳过（0 = 关闭限制）
+  inference_fps: 30               # 转向、寻脸和跟踪时的人脸检测帧率上限
+  idle_inference_fps: 5           # 待机和手动控制时保留低频检测
+  opencv_threads: 2               # 进程内 OpenCV 线程预算（0 = 使用 OpenCV 默认）
   camera_cx: 320                  # 水平图像中心列（= width / 2）
   camera_cy: 200                  # 垂直图像中心行（= height / 2）
 
-  # 目标跟踪模式选择
-  target_mode: "aruco"            # "aruco"（工业靶标高精基准，推荐） | "face"（人机交互人脸检测）
+  # 阶段 4 锁定纯人脸跟踪；ArUco 属于已移出范围的旧方案
+  target_mode: "face"
 
   # ArUco 工业靶标参数 (12cm 5mm 哑光雪弗板 UV 打印)
   aruco:
@@ -46,11 +50,16 @@ camera:
     target_ids: [10, 11, 12, 13, 14, 15, 16, 17] # 采购的标志板 ID 组
     marker_size_m: 0.12           # 物理尺寸 12 cm = 0.12 m
 
-  # 人脸检测参数（用于 face 模式）
-  detector: "mediapipe"           # "mediapipe" | "haar"（保底）
-  haar_cascade: "haarcascade_frontalface_default.xml"
-  min_detection_confidence: 0.5   # MediaPipe 最低置信度
-  observation_timeout_s: 0.3      # 观测超过此时间不再使用（防旧帧控制）
+  # 保留 320x200 的检测输入，预览和控制坐标使用原始画面尺寸
+  detector: "yunet"               # "yunet" | "mediapipe" | "haar"
+  yunet_model: "assets/models/face_detection_yunet_2023mar.onnx"
+  detection_width: 320
+  detection_height: 200
+  min_detection_confidence: 0.5
+  face_smoothing_alpha: 0.6        # 人脸中心 EMA 平滑系数
+  face_max_jump_px: 160            # 防跳脸：旧目标中心最大允许跳变
+  target_lost_reset_frames: 5      # 连续丢失后允许重新选最大脸
+  observation_timeout_s: 0.3      # 观测超过此时间不再用于云台控制
 
 # ── 舵机与执行器参数（M2: 总线舵机二维平台 + 微雪 Bus Servo Adapter）─────────
 servo:
@@ -86,11 +95,17 @@ servo:
   yaw_offset_deg: 33.0            # 水平机械零位偏置（°）：2026-11-22 实机微调校平
   pitch_offset_deg: -17.0         # 俯仰机械零位偏置（°）：2026-11-22 实机微调校平
 
-  # 步进与死区
+  # 跟踪死区、角速度与加速度
   step_deg_yaw: 2.0               # 水平每次步进量（°）
   step_deg_pitch: 1.5             # 俯仰每次步进量（°）
   deadzone_px_x: 30               # 水平视觉死区（像素）
   deadzone_px_y: 25               # 垂直视觉死区（像素）
+  tracking_yaw_gain: 0.50         # 死区外每像素对应的水平角速度（°/s/px）
+  tracking_pitch_gain: 0.40       # 死区外每像素对应的俯仰角速度（°/s/px）
+  max_yaw_speed_deg_s: 42.0       # 水平跟踪速度上限（°/s）
+  max_pitch_speed_deg_s: 28.0     # 俯仰跟踪速度上限（°/s）
+  yaw_accel_deg_s2: 210.0         # 水平跟踪加减速上限（°/s²）
+  pitch_accel_deg_s2: 150.0       # 俯仰跟踪加减速上限（°/s²）
 
   # ── 旧版 PWM 驱动兼容参数（当 driver_type 为 "pwm" 时生效）──
   servo_gpio: 18                  # 树莓派硬件 PWM 引脚
@@ -119,11 +134,17 @@ dual_mcu:
 
 # ── 控制逻辑参数（M5）─────────────────────────────────────────────────────
 control:
-  turn_timeout_s: 1.5             # TURN_ONCE 超时（s），超时后强制进入 FOLLOW
-  lost_timeout_s: 3.0             # FOLLOW 无目标超时（s），超时后回中并回 IDLE
+  turn_timeout_s: 1.5             # 粗测向转向超时（s），超时后进入寻脸
+  lost_timeout_s: 0.0              # TRACK_FACE 丢脸后默认不超时退出，保持等待续跟
   turn_settle_s: 0.3              # 转向到位平息时间（s）
-  follow_interval_ms: 50          # 视觉跟随控制周期（ms），约 20 Hz
-  main_loop_hz: 30                # 主循环频率（Hz）
+  search_pitch_deg: 30.0           # 进入寻脸前预抬俯仰，适配近距（约0.5m）人脸取景
+  search_timeout_s: 4.5            # 寻脸微扫总时长（s），结束后安全回中
+  search_sweep_interval_s: 0.5    # 微扫目标变更间隔（s）
+  recovery_delay_s: 0.12          # 边缘丢脸后等待短暂遮挡过去（s）
+  recovery_timeout_s: 1.4         # 单次出画续跟的最长搜索时长（s）
+  recovery_yaw_deg: 22.0          # 沿出画方向最多补扫的水平角（°）
+  recovery_pitch_deg: 12.0        # 沿出画方向最多补扫的俯仰角（°）
+  main_loop_hz: 30                # 主循环和跟踪舵机下发频率（Hz）
 
 # ── 音响与语音播报参数（M7 拓展）─────────────────────────────────────────
 speaker:
@@ -160,7 +181,7 @@ web:
   enabled: true                   # 是否启动 Web 运行时适配器
   host: "0.0.0.0"                 # 监听地址（0.0.0.0 允许局域网/千兆网口访问）
   port: 8080                      # Web 端口
-  telemetry_hz: 20                # SSE 遥测推流频率 (Hz)
-  mjpeg_fps: 30                   # MJPEG 视频推流帧率上限 (FPS)
+  telemetry_hz: 10                # SSE 遥测推流频率 (Hz)
+  mjpeg_fps: 15                   # MJPEG 视频推流帧率上限 (FPS)
   mjpeg_quality: 75               # JPEG 图像压缩质量 (1~100)
   cors_enabled: true              # 跨域支持

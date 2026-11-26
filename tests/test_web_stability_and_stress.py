@@ -302,39 +302,21 @@ def test_gimbal_soft_limits_exhaustive_boundaries(web_server):
 # ==============================================================================
 # 5. 激光连续开启超时安全保护
 # ==============================================================================
-def test_laser_continuous_timeout_and_thermal_protection(web_server):
-    """验证激光开启连续计时、超过 10s 自动过热保护强制熄灭与失锁切断。"""
+def test_removed_laser_stays_fail_closed(web_server):
+    """阶段 4 不装配激光器；遗留遥控端点必须 fail closed。"""
     app, port = web_server
     base_url = f"http://127.0.0.1:{port}"
-
-    # 5.1 手动强制开启激光
-    st, _, body = _request(
+    status, _, body = _request(
         f"{base_url}/api/control/laser",
         method="POST",
         payload={"enable": True, "force_override": True},
     )
-    assert st == 200
-    res = json.loads(body.decode("utf-8"))["data"]
-    assert res["is_on"] is True
-    assert app.laser.is_on is True
-
-    # 5.2 模拟物理时间流逝 10.5 秒 (超过安全上限 max_continuous_s=10.0s)
-    app.laser.on_start_mono = time.monotonic() - 10.5
-
-    # 触发状态巡检 (通过 GET /api/telemetry)
-    st, _, body = _request(f"{base_url}/api/telemetry")
-    assert st == 200
-    t_data = json.loads(body.decode("utf-8"))["data"]
-    # 激光器由于超时保护被主动切断
-    assert t_data["laser"]["is_on"] is False
-    assert app.laser.is_on is False
-
-    # 5.3 验证失锁或移出死区时的瞬态切断
-    app.laser.set_laser(True)
-    assert app.laser.is_on is True
-    # 目标移出死区
-    app.laser.on_target_tracking(in_deadzone=False)
-    assert app.laser.is_on is False
+    assert status == 200
+    assert json.loads(body.decode("utf-8"))["data"]["is_on"] is False
+    assert not hasattr(app, "laser")
+    status, _, body = _request(f"{base_url}/api/telemetry")
+    assert status == 200
+    assert json.loads(body.decode("utf-8"))["data"]["laser"]["is_on"] is False
 
 
 # ==============================================================================

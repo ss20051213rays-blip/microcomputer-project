@@ -1,25 +1,40 @@
 import sys
-import os
 import time
 import argparse
 
-try:
-    import cv2
-except ImportError:
-    print("Error: OpenCV not installed. Run: pip install opencv-python")
-    sys.exit(1)
-
-from pantilt.adapters.perception.vision import CameraCapture
+from pantilt.adapters.perception.vision import CameraCapture, VisionPipeline, cv2
+from pantilt.adapters.runtime.desktop import DesktopPreview
 from pantilt.infrastructure.config import load_config, setup_logger
 from pantilt.infrastructure.paths import DATA_DIR, DEFAULT_CONFIG
+
+
+def desktop_preview(config):
+    vision = VisionPipeline(config['camera'])
+    preview = DesktopPreview()
+    try:
+        if not vision.start():
+            return 1
+        while preview.show(vision):
+            time.sleep(0.02)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        vision.stop()
+        preview.close()
+    return 0
 
 def main():
     parser = argparse.ArgumentParser(description="摄像头取流与测试预览")
     parser.add_argument("--seconds", type=float, default=10.0, help="测试运行时长 (秒)")
+    parser.add_argument("--desktop", action="store_true", help="在桌面显示实时画面，按 Q 或 Esc 退出")
     args = parser.parse_args()
+    if cv2 is None:
+        parser.exit(1, "摄像头预览需要 OpenCV。\n")
 
     config = load_config(DEFAULT_CONFIG)
     logger = setup_logger(config)
+    if args.desktop:
+        return desktop_preview(config)
     
     cam = CameraCapture(config['camera'])
     if not cam.start():
@@ -29,7 +44,6 @@ def main():
     print(f"[*] 准备预热，测试运行时长 {args.seconds}s...")
     
     frames_counted = 0
-    start_time = time.time()
     
     try:
         # 等待相机预热出图
@@ -45,16 +59,18 @@ def main():
         else:
             print("[-] 未能获取到初始图像。")
             
-        print("[*] 正在测试取帧性能 (无头模式，不弹窗显示)...")
-        while time.time() - start_time < args.seconds:
-            frame = cam.get_latest_frame()
-            if frame is not None:
+        print("[*] 正在测量不同采集时间戳的画面数 (无头模式)...")
+        _, captured_at = cam.get_latest_frame_sample(copy=False)
+        started = time.monotonic()
+        deadline = started + args.seconds
+        while (remaining := deadline - time.monotonic()) > 0:
+            _, new_capture = cam.wait_for_frame(captured_at, timeout=remaining)
+            if new_capture is not None and new_capture <= deadline:
+                captured_at = new_capture
                 frames_counted += 1
-            # 模拟后端的处理延迟
-            time.sleep(0.03)
-            
-        fps = frames_counted / args.seconds
-        print(f"\n[+] 测试完成! 实测空跑提取帧率: {fps:.1f} FPS")
+
+        fps = frames_counted / max(time.monotonic() - started, 1e-9)
+        print(f"\n[+] 实测应用收到的解码画面: {fps:.1f} FPS")
         if fps < 10:
             print("[!] 帧率低于 10 FPS，可能会影响后续视觉跟随的顺滑度。")
             
@@ -64,5 +80,5 @@ def main():
         cam.stop()
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
 

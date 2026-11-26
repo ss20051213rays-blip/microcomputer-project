@@ -1,150 +1,182 @@
-"""状态机脱机模拟验收测试与 pytest 用例集。"""
+"""阶段 4 四态人脸跟踪状态机单测。"""
 import time
 
-from pantilt.application.simulation import run_simulation_test
 from pantilt.bootstrap import create_app
 from pantilt.domain.types import AudioEvent, SystemState, VisionObservation
 
 
-def test_01_initial_idle_and_centered(running_app):
-    """测试项 1: 系统冷启动成功，初始状态为 IDLE，舵机归中 0.0°。"""
+def _start_search(app):
+    now = time.monotonic()
+    app.audio.event_queue.put(AudioEvent(now, -20.0, "left", 0.9, "test"))
+    app.tick(now)
+    assert app.state == SystemState.TURN_AND_RESPOND
+    app.tick(now + 0.01)  # 开始到位平息计时
+    now += app.turn_settle_s + 0.02
+    app.tick(now)
+    assert app.state == SystemState.SEARCH_FACE
+    return now
+
+
+def _face(now, dx=0.0, dy=0.0):
+    return VisionObservation(now, True, dx, (300, 180, 40, 40), 0.95, 20.0, dy_px=dy)
+
+
+def test_boots_idle_without_laser_dependency(running_app):
     assert running_app.state == SystemState.IDLE
-    assert abs(running_app.servo.current_angle - 0.0) < 1e-3
+    assert running_app.servo.get_angles() == (0.0, 0.0)
+    assert not hasattr(running_app, "laser")
 
 
-def test_02_audio_trigger_turn_once(running_app):
-    """测试项 2: 声学事件正确触发状态转移 IDLE -> TURN_ONCE，舵机开环转向 -35.0°。"""
+def test_audio_event_turns_then_settle_enters_search(running_app):
     now = time.monotonic()
-    clap_event = AudioEvent(
-        timestamp_mono=now,
-        theta_audio_deg=-35.0,
-        side="left",
-        confidence=0.85,
-        method="gcc_phat",
-    )
-    running_app.audio.event_queue.put(clap_event)
+    running_app.audio.event_queue.put(AudioEvent(now, -35.0, "left", 0.85, "gcc_phat"))
     running_app.tick(now)
+    assert running_app.state == SystemState.TURN_AND_RESPOND
+    assert running_app.servo.current_yaw == -35.0
+    assert running_app.servo.current_pitch == 30.0
 
-    assert running_app.state == SystemState.TURN_ONCE
-    assert abs(running_app.servo.current_angle - (-35.0)) < 1e-3
+    running_app.tick(now + 0.01)
+    running_app.tick(now + running_app.turn_settle_s + 0.02)
+    assert running_app.state == SystemState.SEARCH_FACE
 
 
-def test_03_turn_settle_follow_transition(running_app):
-    """测试项 3: 转向到位后平息延时结束，成功顺序接管进入 FOLLOW 状态。"""
+def test_turn_waits_for_pitch_target_before_settle(running_app):
+    machine = running_app.state_machine
     now = time.monotonic()
-    clap = AudioEvent(now, -35.0, "left", 0.85, "gcc_phat")
-    running_app.audio.event_queue.put(clap)
-    running_app.tick(now)
+    event = AudioEvent(now, -10.0, "left", 0.9, "test")
+    first = machine.step(now, event, None, 0.0, running_app.controller, current_pitch=0.0)
+    assert first.servo_action == "set_angles"
+    assert first.target_pitch_angle == 30.0
 
-    # 记录平息起点
-    running_app.tick(now)
-    now += running_app.turn_settle_s + 0.05
-    running_app.tick(now)
-
-    assert running_app.state == SystemState.FOLLOW
-
-
-def test_04_echo_rejection_in_follow(running_app):
-    """测试项 4: FOLLOW 视觉接管期间，背景回声与新拍手被完全屏蔽忽略。"""
-    now = time.monotonic()
-    clap = AudioEvent(now, -35.0, "left", 0.85, "gcc_phat")
-    running_app.audio.event_queue.put(clap)
-    running_app.tick(now)
-    running_app.tick(now)
-    now += running_app.turn_settle_s + 0.05
-    running_app.tick(now)
-    assert running_app.state == SystemState.FOLLOW
-
-    # 注入回声
-    echo = AudioEvent(now, 40.0, "right", 0.9, "gcc_phat")
-    running_app.audio.event_queue.put(echo)
-    running_app.tick(now)
-    assert running_app.state == SystemState.FOLLOW
+    machine.step(now + 0.01, None, None, -10.0, running_app.controller, current_pitch=29.0)
+    assert machine.state == SystemState.TURN_AND_RESPOND
+    machine.step(now + 0.02, None, None, -10.0, running_app.controller, current_pitch=30.0)
+    assert machine.state == SystemState.TURN_AND_RESPOND
+    machine.step(now + 0.35, None, None, -10.0, running_app.controller, current_pitch=30.0)
+    assert machine.state == SystemState.SEARCH_FACE
 
 
-def test_05_vision_step_response(running_app):
-    """测试项 5: 人脸偏右 (dx=+45px) 触发正确步进。"""
-    now = time.monotonic()
-    clap = AudioEvent(now, -35.0, "left", 0.85, "gcc_phat")
-    running_app.audio.event_queue.put(clap)
+def test_face_found_immediately_enters_tracking(running_app):
+    now = _start_search(running_app)
+    running_app.vision.set_mock_observation(_face(now, dx=45.0, dy=-40.0))
     running_app.tick(now)
-    running_app.tick(now)
-    now += running_app.turn_settle_s + 0.05
-    running_app.tick(now)
-
-    face_obs_right = VisionObservation(
-        timestamp_mono=now,
-        face_found=True,
-        dx_px=45.0,
-        bbox=(100, 100, 50, 50),
-        confidence=0.95,
-        fps=15.0,
-    )
-    running_app.vision.set_mock_observation(face_obs_right)
-    angle_before = running_app.servo.current_angle
-    running_app.tick(now)
-    assert running_app.servo.current_angle > angle_before
+    assert running_app.state == SystemState.TRACK_FACE
+    yaw, pitch = running_app.servo.get_angles()
+    assert yaw > -20.0
+    assert pitch > 0.0
 
 
-def test_06_deadzone_filtering(running_app):
-    """测试项 6: 人脸位于死区内 (dx=+10px) 舵机保持静止，防抖滤波生效。"""
-    now = time.monotonic()
-    clap = AudioEvent(now, -35.0, "left", 0.85, "gcc_phat")
-    running_app.audio.event_queue.put(clap)
-    running_app.tick(now)
-    running_app.tick(now)
-    now += running_app.turn_settle_s + 0.05
-    running_app.tick(now)
+def test_search_sweeps_then_returns_to_center(running_app):
+    now = _start_search(running_app)
+    # With no face, the first sweep step moves 10 degrees from the arrival heading.
+    running_app.tick(now + 0.6)
+    assert running_app.state == SystemState.SEARCH_FACE
+    assert running_app.servo.current_yaw == -10.0
 
-    face_obs_deadzone = VisionObservation(
-        timestamp_mono=now,
-        face_found=True,
-        dx_px=10.0,
-        bbox=(100, 100, 50, 50),
-        confidence=0.95,
-        fps=15.0,
-    )
-    running_app.vision.set_mock_observation(face_obs_deadzone)
-    angle_before = running_app.servo.current_angle
-    running_app.tick(now)
-    assert abs(running_app.servo.current_angle - angle_before) < 1e-3
-
-
-def test_07_lost_target_timeout_recenter(running_app):
-    """测试项 7: 丢脸超过 lost_timeout_s 成功触发超时保护，舵机安全归中 0.0° 并返回 IDLE。"""
-    now = time.monotonic()
-    clap = AudioEvent(now, -35.0, "left", 0.85, "gcc_phat")
-    running_app.audio.event_queue.put(clap)
-    running_app.tick(now)
-    running_app.tick(now)
-    now += running_app.turn_settle_s + 0.05
-    running_app.tick(now)
-
-    face_obs_lost = VisionObservation(
-        timestamp_mono=now,
-        face_found=False,
-        dx_px=0.0,
-        bbox=(0, 0, 0, 0),
-        confidence=0.0,
-        fps=15.0,
-    )
-    running_app.vision.set_mock_observation(face_obs_lost)
-    now += running_app.lost_timeout_s + 0.1
-    running_app.tick(now)
-
+    running_app.tick(now + running_app.state_machine.search_timeout_s + 0.1)
     assert running_app.state == SystemState.IDLE
-    assert abs(running_app.servo.current_angle - 0.0) < 1e-3
+    assert running_app.servo.get_angles() == (0.0, 0.0)
 
 
-def test_08_safe_shutdown(app_config):
-    """测试项 8: 系统资源与管线按序释放，舵机 PWM 成功关闭。"""
-    app = create_app(app_config, dry_run=True)
+def test_tracking_moves_both_axes_and_respects_deadzone(running_app):
+    now = _start_search(running_app)
+    running_app.vision.set_mock_observation(_face(now, dx=45.0, dy=-40.0))
+    running_app.tick(now)
+    yaw, pitch = running_app.servo.get_angles()
+    assert yaw > -20.0 and pitch > 0.0
+
+    # A centered observation lets both axes brake, then hold.
+    period = running_app.controller.period_s
+    running_app.vision.set_mock_observation(_face(now + period, dx=5.0, dy=3.0))
+    running_app.tick(now + period)
+    stopped = running_app.servo.get_angles()
+    running_app.tick(now + 2 * period)
+    assert running_app.servo.get_angles() == stopped
+
+
+def test_tracking_holds_position_during_occlusion_and_resumes(running_app):
+    now = _start_search(running_app)
+    running_app.vision.set_mock_observation(_face(now, dx=45.0))
+    running_app.tick(now)
+    assert running_app.state == SystemState.TRACK_FACE
+    before = running_app.servo.get_angles()
+
+    lost_at = now + 5.0
+    lost = VisionObservation(lost_at, False, 0, (0, 0, 0, 0), 0, 20)
+    running_app.vision.set_mock_observation(lost)
+    running_app.tick(lost_at)
+    assert running_app.state == SystemState.TRACK_FACE
+    assert running_app.servo.get_angles() == before
+
+    now = lost_at + 0.05
+    running_app.vision.set_mock_observation(_face(now, dx=-70.0))
+    running_app.tick(now)
+    assert running_app.state == SystemState.TRACK_FACE
+    assert running_app.servo.current_yaw < before[0]
+
+
+def test_fast_exit_starts_bounded_search_then_holds(running_app):
+    now = _start_search(running_app)
+    running_app.vision.set_mock_observation(_face(now, dx=14.0))
+    running_app.tick(now)
+    now += 0.07
+    running_app.vision.set_mock_observation(_face(now, dx=78.0))
+    running_app.tick(now)
+    yaw_before, pitch_before = running_app.servo.get_angles()
+
+    def tick_without_face(timestamp):
+        missing = VisionObservation(timestamp, False, 0, (0, 0, 0, 0), 0, 20)
+        running_app.vision.set_mock_observation(missing)
+        running_app.tick(timestamp)
+
+    lost_at = now + 0.08
+    tick_without_face(lost_at)
+    assert running_app.servo.get_angles() == (yaw_before, pitch_before)
+    for n in range(1, 55):
+        tick_without_face(lost_at + n / 30)
+    yaw_after, pitch_after = running_app.servo.get_angles()
+    assert 15.0 < yaw_after - yaw_before <= 22.0
+    assert pitch_after == pitch_before
+    tick_without_face(lost_at + 2.0)
+    assert running_app.servo.get_angles() == (yaw_after, pitch_after)
+
+    now = lost_at + 2.1
+    running_app.vision.set_mock_observation(_face(now, dx=-65.0))
+    running_app.tick(now)
+    assert running_app.state == SystemState.TRACK_FACE
+    assert running_app.servo.current_yaw < yaw_after
+
+
+def test_vertical_exit_begins_search_but_camera_stall_holds(running_app):
+    now = _start_search(running_app)
+    running_app.vision.set_mock_observation(_face(now, dy=-155.0))
+    running_app.tick(now)
+    before = running_app.servo.get_angles()
+    running_app.tick(now + 0.5)
+    running_app.tick(now + 0.7)
+    assert running_app.servo.get_angles() == before
+
+    current = now + 0.80
+    missing = VisionObservation(current, False, 0, (0, 0, 0, 0), 0, 20)
+    running_app.vision.set_mock_observation(missing)
+    running_app.tick(current)
+    assert running_app.servo.current_pitch > before[1]
+    after = running_app.servo.get_angles()
+    running_app.tick(current + 0.4)
+    assert running_app.servo.get_angles() == after
+
+
+def test_audio_is_drained_outside_idle(running_app):
+    now = _start_search(running_app)
+    running_app.audio.event_queue.put(AudioEvent(now, 50.0, "right", 0.9, "test"))
+    running_app.vision.set_mock_observation(_face(now))
+    running_app.tick(now)
+    assert running_app.state == SystemState.TRACK_FACE
+    assert running_app.audio.get_latest_event(block=False) is None
+
+
+def test_safe_shutdown(app_config):
+    app = create_app(app_config, dry_run=True, web=False)
     assert app.start()
     app.stop()
     assert not app.running
-
-
-if __name__ == "__main__":
-    import sys
-    success = run_simulation_test()
-    sys.exit(0 if success else 1)

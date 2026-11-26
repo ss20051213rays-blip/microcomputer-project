@@ -1,79 +1,68 @@
-"""死区步进控制器单测与模拟验证。"""
-import time
+"""双轴跟踪速度和加减速约束。"""
+
 import pytest
 
-from pantilt.domain.types import VisionObservation
 from pantilt.domain.controller import DeadzoneStepController
+from pantilt.domain.types import VisionObservation
+
+PERIOD = 1.0 / 30.0
 
 
 @pytest.fixture
 def controller():
-    config_control = {"observation_timeout_s": 0.5}
-    config_servo = {"deadzone_px": 30, "step_deg": 2.0}
-    return DeadzoneStepController(config_control, config_servo)
+    return DeadzoneStepController({"observation_timeout_s": 0.3}, {})
 
 
-def test_step_left_outside_deadzone(controller):
-    """场景1: 偏差 -50 px (明显偏左) -> 输出 -2.0°。"""
-    now = time.monotonic()
-    obs = VisionObservation(now, True, -50.0, (10, 10, 50, 50), 0.9, 15.0)
-    assert controller.compute_step(obs) == -2.0
+def obs(dx=0.0, dy=0.0, *, timestamp=1.0, found=True):
+    return VisionObservation(timestamp, found, dx, (10, 10, 50, 50), 0.9, 12.5, dy_px=dy)
 
 
-def test_step_right_outside_deadzone(controller):
-    """场景2: 偏差 +45 px (明显偏右) -> 输出 +2.0°。"""
-    now = time.monotonic()
-    obs = VisionObservation(now, True, 45.0, (10, 10, 50, 50), 0.9, 15.0)
-    assert controller.compute_step(obs) == 2.0
+def test_large_error_ramps_up_across_control_ticks_with_same_frame(controller):
+    frame = obs(dx=-1000, dy=-1000)
+    first = controller.compute_steps(frame, 1.0)
+    second = controller.compute_steps(frame, 1.0 + PERIOD)
+    assert first == pytest.approx((-210 * PERIOD**2 / 2, 150 * PERIOD**2 / 2))
+    assert second == pytest.approx(tuple(3 * step for step in first))
 
 
-def test_deadzone_filtering(controller):
-    """场景3/4: 死区内偏差 (-10px, +20px) -> 输出 0.0°。"""
-    now = time.monotonic()
-    obs_left = VisionObservation(now, True, -10.0, (10, 10, 50, 50), 0.9, 15.0)
-    obs_right = VisionObservation(now, True, 20.0, (10, 10, 50, 50), 0.9, 15.0)
-    assert controller.compute_step(obs_left) == 0.0
-    assert controller.compute_step(obs_right) == 0.0
+def test_output_is_limited_per_axis(controller):
+    for tick in range(30):
+        now = 1.0 + tick * PERIOD
+        yaw, pitch = controller.compute_steps(obs(dx=1000, dy=1000, timestamp=now), now)
+        assert 0.0 < yaw <= 42 * PERIOD
+        assert -28 * PERIOD <= pitch < 0.0
+    assert (yaw, pitch) == pytest.approx((42 * PERIOD, -28 * PERIOD))
 
 
-def test_observation_timeout_filtering(controller):
-    """场景5: 观测已过期 1 秒 (防抖) -> 输出 0.0°。"""
-    now = time.monotonic()
-    obs_old = VisionObservation(now - 1.0, True, -60.0, (10, 10, 50, 50), 0.9, 15.0)
-    assert controller.compute_step(obs_old) == 0.0
+def test_small_error_slows_near_deadzone(controller):
+    assert controller.compute_steps(obs(dx=30, dy=25), 1.0) == (0.0, 0.0)
+    frame = obs(dx=31, dy=-26)
+    controller.compute_steps(frame, 1.0 + PERIOD)
+    assert controller.compute_steps(frame, 1.0 + 2 * PERIOD) == pytest.approx((0.5 * PERIOD, 0.4 * PERIOD))
 
 
-def test_no_face_detected(controller):
-    """场景6: 未检测到目标 -> 输出 0.0°。"""
-    now = time.monotonic()
-    obs_none = VisionObservation(now, False, 0.0, (0, 0, 0, 0), 0.0, 15.0)
-    assert controller.compute_step(obs_none) == 0.0
+def test_reversal_decelerates_through_zero(controller):
+    right = obs(dx=200)
+    controller.compute_steps(right, 1.0)
+    controller.compute_steps(right, 1.0 + PERIOD)
+    left = obs(dx=-200, timestamp=1.0 + 2 * PERIOD)
+    steps = [controller.compute_steps(left, 1.0 + tick * PERIOD)[0]
+             for tick in range(2, 5)]
+    assert steps[0] > steps[1] > 0 > steps[2]
 
 
-def main():
-    print("=== 死区步进控制器模拟测试 ===")
-    config_control = {"observation_timeout_s": 0.5}
-    config_servo = {"deadzone_px": 30, "step_deg": 2.0}
-    controller_inst = DeadzoneStepController(config_control, config_servo)
-    now = time.monotonic()
-
-    test_cases = [
-        ("场景1: 偏差 -50 px (明显偏左)", -50.0, 0.0),
-        ("场景2: 偏差 +45 px (明显偏右)", 45.0, 0.0),
-        ("场景3: 偏差 -10 px (死区内偏左)", -10.0, 0.0),
-        ("场景4: 偏差 +20 px (死区内偏右)", 20.0, 0.0),
-        ("场景5: 观测已过期 1 秒 (防抖)", -60.0, 1.0),
-        ("场景6: 未检测到人脸", None, 0.0),
-    ]
-
-    for name, dx, age in test_cases:
-        if dx is None:
-            obs = VisionObservation(now - age, False, 0.0, (0, 0, 0, 0), 0.0, 15.0)
-        else:
-            obs = VisionObservation(now - age, True, dx, (10, 10, 50, 50), 0.9, 15.0)
-        step = controller_inst.compute_step(obs)
-        print(f"{name:30s} => 输出步进角: {step:>5.1f}°")
+def test_repeated_tick_and_delayed_tick_do_not_add_extra_motion(controller):
+    frame = obs(dx=1000)
+    controller.compute_steps(frame, 1.0)
+    assert controller.compute_steps(frame, 1.0) == (0.0, 0.0)
+    assert controller.compute_steps(frame, 1.2)[0] == pytest.approx(1.5 * 210 * PERIOD**2)
 
 
-if __name__ == "__main__":
-    main()
+@pytest.mark.parametrize("lost", [None, obs(found=False), obs(dx=120, timestamp=0.0)])
+def test_missing_or_expired_frame_holds_and_resets_speed(controller, lost):
+    frame = obs(dx=200, dy=-100)
+    initial = controller.compute_steps(frame, 1.0)
+    controller.compute_steps(frame, 1.0 + PERIOD)
+    assert controller.compute_steps(lost, 1.0 + 2 * PERIOD) == (0.0, 0.0)
+    reacquired = obs(dx=200, dy=-100, timestamp=1.0 + 3 * PERIOD)
+    assert controller.compute_steps(reacquired, reacquired.timestamp_mono) == pytest.approx(initial)

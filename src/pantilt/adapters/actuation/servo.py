@@ -12,6 +12,7 @@ except ImportError:
     serial = None
 
 logger = logging.getLogger("App")
+BUS_STEPS_PER_DEGREE = 4096.0 / 360.0
 
 class ServoController:
     """
@@ -66,6 +67,7 @@ class ServoController:
 
         self.pi = None
         self.ser = None
+        self._last_bus_position = {}
 
         if self.dry_run:
             logger.info(f"Servo running in DRY-RUN mode (driver_type: {self.driver_type}).")
@@ -108,8 +110,11 @@ class ServoController:
             return
 
         # 角度映射到 0~4095 原始值
-        raw_pos = int(2048 + angle_deg * (4096.0 / 360.0))
+        raw_pos = int(2048 + angle_deg * BUS_STEPS_PER_DEGREE)
         raw_pos = max(0, min(4095, raw_pos))
+        # 跟踪时避免用同一编码器刻度反复重发目标，打断舵机内部的运动。
+        if speed and self._last_bus_position.get(servo_id) == raw_pos:
+            return
 
         # 协议寄存器: 0x2A (GOAL_POSITION)
         # 包格式: 0xFF 0xFF ID LEN INST(0x03) REG(0x2A) POS_L POS_H TIME_L TIME_H SPD_L SPD_H CHKSUM
@@ -135,6 +140,7 @@ class ServoController:
             # 半双工单线总线：留出舵机 6 字节应答与适配器切换时间，防止连发双轴指令撞包
             time.sleep(0.015)
             self.ser.reset_input_buffer()
+            self._last_bus_position[servo_id] = raw_pos
         except Exception as e:
             logger.error(f"总线舵机发送指令失败: {e}")
 
@@ -182,7 +188,7 @@ class ServoController:
         """设置偏航角度 (水平 Yaw) 及可选的俯仰角度 (Pitch)"""
         self.set_angles(yaw=angle, pitch=pitch)
 
-    def set_angles(self, yaw=None, pitch=None):
+    def set_angles(self, yaw=None, pitch=None, *, yaw_speed=0, pitch_speed=0):
         """同时或单独设置偏航与俯仰角度并进行软件限位拦截"""
         if yaw is not None:
             if yaw < self.min_yaw:
@@ -206,18 +212,37 @@ class ServoController:
         if not self.dry_run:
             if self.driver_type == "bus" and self.ser:
                 if yaw is not None:
-                    self._send_bus_pos(self.yaw_id, (self.current_yaw + self.yaw_offset_deg) * self.yaw_sign)
+                    angle = (self.current_yaw + self.yaw_offset_deg) * self.yaw_sign
+                    self._send_bus_pos(self.yaw_id, angle, speed=yaw_speed)
                 if pitch is not None:
-                    self._send_bus_pos(self.pitch_id, (self.current_pitch + self.pitch_offset_deg) * self.pitch_sign)
+                    angle = (self.current_pitch + self.pitch_offset_deg) * self.pitch_sign
+                    self._send_bus_pos(self.pitch_id, angle, speed=pitch_speed)
             elif self.driver_type == "pwm" and self.pi and yaw is not None:
                 pulse = self._angle_to_pulse(self.current_yaw)
                 self.pi.set_servo_pulsewidth(self.gpio, pulse)
 
         logger.debug(f"Servo set to Yaw={self.current_yaw}°, Pitch={self.current_pitch}°")
 
-    def step(self, delta_yaw, delta_pitch=0.0):
-        """两轴步进控制"""
-        self.set_angles(self.current_yaw + delta_yaw, self.current_pitch + delta_pitch)
+    def step(self, delta_yaw, delta_pitch=0.0, *, period_s=None):
+        """按控制周期限速下发实际变化的轴，避免在限位处重发。"""
+        yaw = min(self.max_yaw, max(self.min_yaw, self.current_yaw + delta_yaw))
+        pitch = min(self.max_pitch, max(self.min_pitch, self.current_pitch + delta_pitch))
+        yaw_delta = yaw - self.current_yaw
+        pitch_delta = pitch - self.current_pitch
+        if not yaw_delta and not pitch_delta:
+            return
+
+        def bus_speed(delta):
+            if period_s is None or not delta:
+                return 0
+            # 速度字段以编码器步数/秒计，给小幅命令保留最低转速。
+            speed_deg_s = max(3.0, abs(delta) / period_s)
+            return round(speed_deg_s * BUS_STEPS_PER_DEGREE)
+
+        self.set_angles(
+            yaw if yaw_delta else None, pitch if pitch_delta else None,
+            yaw_speed=bus_speed(yaw_delta), pitch_speed=bus_speed(pitch_delta),
+        )
 
     def center(self):
         """两轴回中 (0°, 0°)"""

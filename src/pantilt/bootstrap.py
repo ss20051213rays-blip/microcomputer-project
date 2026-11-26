@@ -4,7 +4,6 @@
 """
 from typing import Any, Dict, Optional
 
-from pantilt.adapters.actuation.laser import LaserIndicator
 from pantilt.adapters.actuation.servo import ServoController
 from pantilt.adapters.perception.audio import AudioPipeline
 from pantilt.adapters.perception.vision import VisionPipeline
@@ -32,15 +31,14 @@ def create_app(
     cfg_servo = config.get("servo", {})
     cfg_audio = config.get("audio", {})
     cfg_camera = config.get("camera", {})
-    cfg_laser = config.get("laser", {})
     cfg_web = dict(config.get("web", {}))
 
     servo = ServoController(cfg_servo, dry_run=dry_run)
     audio = AudioPipeline(cfg_audio, dry_run=dry_run)
-    vision = VisionPipeline(cfg_camera, dry_run=dry_run)
-    controller = DeadzoneStepController(cfg_ctrl, cfg_servo)
-    laser = LaserIndicator(cfg_laser, dry_run=dry_run)
-    state_machine = TrackerStateMachine(cfg_ctrl, cfg_laser)
+    vision = VisionPipeline(cfg_camera, dry_run=dry_run, start_active=False)
+    tracking_config = {"observation_timeout_s": cfg_camera.get("observation_timeout_s", 0.3), **cfg_ctrl}
+    controller = DeadzoneStepController(tracking_config, cfg_servo)
+    state_machine = TrackerStateMachine(cfg_ctrl, cfg_servo, cfg_camera)
 
     main_loop_hz = cfg_ctrl.get("main_loop_hz", 30)
 
@@ -58,7 +56,6 @@ def create_app(
         audio=audio,
         vision=vision,
         controller=controller,
-        laser=laser,
         state_machine=state_machine,
         console=None,
         web=None,

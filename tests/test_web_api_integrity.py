@@ -164,7 +164,7 @@ def test_status_and_telemetry_schema_integrity(web_server):
         assert field in st_data, f"status 缺少字段: {field}"
         assert isinstance(st_data[field], field_type), f"字段 {field} 类型非法: {type(st_data[field])}"
     assert st_data["version"] == "0.2.0"
-    assert st_data["app_state"] in ("IDLE", "TURN_ONCE", "FOLLOW")
+    assert st_data["app_state"] in ("IDLE", "TURN_AND_RESPOND", "SEARCH_FACE", "TRACK_FACE")
 
     # 2.2 GET /api/telemetry 全量遥测包契约
     status, _, body = _request(f"{base_url}/api/telemetry")
@@ -344,7 +344,7 @@ def test_laser_control_and_mode_switching(web_server):
     )
     assert status == 400
 
-    # 4.2 激光手动点亮 (带 force_override 强制点亮)
+    # 4.2 阶段 4 已移除激光执行器，保留的旧接口必须 fail closed。
     status, _, body = _request(
         f"{base_url}/api/control/laser",
         method="POST",
@@ -352,25 +352,21 @@ def test_laser_control_and_mode_switching(web_server):
     )
     assert status == 200
     res = json.loads(body.decode("utf-8"))
-    assert res["data"]["is_on"] is True
-    assert app.laser_is_on is True
-    assert res["data"]["max_continuous_s"] == 10.0
+    assert res["data"]["is_on"] is False
+    assert not hasattr(app, "laser")
 
-    # 验证 telemetry 接口状态与物理状态强一致
     _, _, body = _request(f"{base_url}/api/telemetry")
     t_data = json.loads(body.decode("utf-8"))["data"]
-    assert t_data["laser"]["is_on"] is True
+    assert t_data["laser"]["is_on"] is False
 
-    # 4.3 激光手动熄灭
+    # 4.3 旧接口即便收到关闭命令也保持 fail closed。
     status, _, body = _request(
         f"{base_url}/api/control/laser",
         method="POST",
         payload={"enable": False},
     )
     assert status == 200
-    res = json.loads(body.decode("utf-8"))
-    assert res["data"]["is_on"] is False
-    assert app.laser_is_on is False
+    assert json.loads(body.decode("utf-8"))["data"]["is_on"] is False
 
     # 4.4 安全联动保护：在 AUTO 模式下手动移动云台时，自动切入 MANUAL 模式
     _request(f"{base_url}/api/control/mode", method="POST", payload={"mode": "AUTO"})

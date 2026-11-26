@@ -15,7 +15,7 @@ def app_config() -> Dict[str, Any]:
 
 @pytest.fixture
 def running_app(app_config):
-    app = create_app(app_config, dry_run=True)
+    app = create_app(app_config, dry_run=True, web=False)
     assert app.start(), "Failed to start running_app in fixture"
     yield app
     app.stop()

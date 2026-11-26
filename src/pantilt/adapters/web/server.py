@@ -678,6 +678,8 @@ class WebRuntimeAdapter:
         # 环形日志与脱机视频生成器
         self.log_handler = RingBufferLogHandler(max_records=200)
         self.mock_video = MockVideoGenerator(width=640, height=400)
+        self._video_lock = threading.Lock()
+        self._encoded_video = {}
 
         # 挂载日志处理器到主 Logger
         self.log_handler.setLevel(logging.DEBUG)
@@ -892,28 +894,38 @@ class WebRuntimeAdapter:
     def get_video_frame(self, draw_hud: bool = False) -> bytes:
         """获取视频流单帧 JPEG 字节流（优先读取真实硬件相机，若无则使用高拟真战术合成画面）。"""
         app = self.app
-        real_frame = None
+        vision = getattr(app, "vision", None)
+        if vision is not None and cv2 is not None:
+            with self._video_lock:
+                try:
+                    if hasattr(vision, "get_latest_frame_sample"):
+                        frame, captured_at = vision.get_latest_frame_sample()
+                    else:
+                        frame, captured_at = vision.get_latest_frame(), None
+                except Exception:
+                    frame, captured_at = None, None
 
-        if app and hasattr(app, "vision") and app.vision:
-            try:
-                real_frame = app.vision.get_latest_frame()
-            except Exception:
-                real_frame = None
+                if frame is not None:
+                    quality = self.mjpeg_quality
+                    cache_key = (captured_at, quality)
+                    cached_key, jpg = self._encoded_video.get(draw_hud, (None, None))
+                    if captured_at is not None and cached_key == cache_key:
+                        return jpg
 
-        if real_frame is not None and cv2 is not None:
-            # 真实硬件图像编码
-            frame_to_encode = real_frame.copy()
-            if draw_hud:
-                # 叠加准星与遥测 HUD
-                h, w = frame_to_encode.shape[:2]
-                cx, cy = w // 2, h // 2
-                cv2.circle(frame_to_encode, (cx, cy), 18, (0, 255, 157), 1)
-                cv2.line(frame_to_encode, (cx - 24, cy), (cx + 24, cy), (0, 255, 157), 1)
-                cv2.line(frame_to_encode, (cx, cy - 24), (cx, cy + 24), (0, 255, 157), 1)
+                    if draw_hud:
+                        frame = frame.copy()
+                        h, w = frame.shape[:2]
+                        cx, cy = w // 2, h // 2
+                        cv2.circle(frame, (cx, cy), 18, (0, 255, 157), 1)
+                        cv2.line(frame, (cx - 24, cy), (cx + 24, cy), (0, 255, 157), 1)
+                        cv2.line(frame, (cx, cy - 24), (cx, cy + 24), (0, 255, 157), 1)
 
-            ret, buf = cv2.imencode(".jpg", frame_to_encode, [cv2.IMWRITE_JPEG_QUALITY, self.mjpeg_quality])
-            if ret:
-                return bytes(buf)
+                    ret, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, quality])
+                    if ret:
+                        jpg = bytes(buf)
+                        if captured_at is not None:
+                            self._encoded_video[draw_hud] = (cache_key, jpg)
+                        return jpg
 
         # 脱机模拟合成图像
         return self.mock_video.generate_frame(

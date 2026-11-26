@@ -6,10 +6,13 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 from pantilt.adapters.runtime.web import WebAdapter, WebRuntimeServer
+from pantilt.adapters.web import server as web_server
 from pantilt.bootstrap import create_app
 from pantilt.cli import parse_args
 from pantilt.domain.types import AudioEvent, SystemState, VisionObservation
@@ -146,25 +149,22 @@ def test_rest_api_center_laser_mode_reset(web_app):
     yaw, pitch = app.servo.get_angles()
     assert abs(yaw) < 1e-3 and abs(pitch) < 1e-3
 
-    # 2. 激光控制点亮
+    # 2. 阶段 4 移除激光执行器；旧 Web 接口必须保持关闭。
     status, _, body = _http_post_json(
         f"http://127.0.0.1:{port}/api/control/laser",
         {"enable": True, "force_override": True},
     )
     assert status == 200
     res = json.loads(body.decode("utf-8"))
-    assert res["data"]["is_on"] is True
-    assert app.laser_is_on is True
+    assert res["data"]["is_on"] is False
+    assert not hasattr(app, "laser")
 
-    # 3. 激光控制熄灭
     status, _, body = _http_post_json(
         f"http://127.0.0.1:{port}/api/control/laser",
         {"enable": False},
     )
     assert status == 200
-    res = json.loads(body.decode("utf-8"))
-    assert res["data"]["is_on"] is False
-    assert app.laser_is_on is False
+    assert json.loads(body.decode("utf-8"))["data"]["is_on"] is False
 
     # 4. 模式切换
     status, _, body = _http_post_json(
@@ -268,6 +268,31 @@ def test_mjpeg_stream_video(web_app):
         assert b"--frame" in chunk
         assert b"image/jpeg" in chunk
         assert b"\xff\xd8" in chunk  # JPEG 魔数 SOI
+
+
+def test_mjpeg_reuses_encoding_for_same_capture(web_app, monkeypatch):
+    app, _ = web_app
+    frame = np.zeros((8, 8, 3), dtype=np.uint8)
+    frame.setflags(write=False)
+    timestamps = iter([1.0, 1.0, 1.0, 1.0, 2.0])
+    monkeypatch.setattr(app.vision, "get_latest_frame_sample", lambda: (frame, next(timestamps)))
+    encodings = []
+
+    def draw(image, *_args):
+        image[0, 0] = 255
+
+    def imencode(_extension, image, _options):
+        encodings.append(image)
+        return True, bytes([len(encodings)])
+
+    monkeypatch.setattr(web_server, "cv2", SimpleNamespace(
+        circle=draw, line=draw, imencode=imencode, IMWRITE_JPEG_QUALITY=1,
+    ))
+    assert app.web.get_video_frame() == app.web.get_video_frame() == b"\x01"
+    assert app.web.get_video_frame(draw_hud=True) == app.web.get_video_frame(draw_hud=True) == b"\x02"
+    assert app.web.get_video_frame() == b"\x03"
+    assert encodings[0] is frame and encodings[2] is frame
+    assert encodings[1].any() and not frame.any()
 
 
 def test_cli_web_options():

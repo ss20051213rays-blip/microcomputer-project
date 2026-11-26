@@ -120,7 +120,7 @@ class LaserTelemetryDTO:
 class SystemStatusDTO:
     """系统宏观健康度与模式状态数据传输对象。"""
 
-    app_state: str = "IDLE"      # 领域状态机: "IDLE" | "TURN_ONCE" | "FOLLOW"
+    app_state: str = "IDLE"      # 领域状态机: IDLE / TURN_AND_RESPOND / SEARCH_FACE / TRACK_FACE
     control_mode: str = "AUTO"   # Web 运行模式: "AUTO" | "MANUAL" | "CALIBRATION"
     running: bool = False
     dry_run: bool = False

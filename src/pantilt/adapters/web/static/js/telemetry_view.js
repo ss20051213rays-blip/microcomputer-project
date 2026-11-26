@@ -24,8 +24,8 @@ export class TelemetryView {
                     </div>
 
                     <div class="metric-card">
-                        <div class="metric-label">视觉 FPS</div>
-                        <div class="metric-value text-cyan" id="m-fps">120.0</div>
+                        <div class="metric-label">检测 FPS</div>
+                        <div class="metric-value text-cyan" id="m-fps">--</div>
                         <div class="metric-sub">OV9281 GLOBAL SHUTTER</div>
                     </div>
 
@@ -206,7 +206,7 @@ export class TelemetryView {
         const fpsEl = this.container.querySelector('#m-fps');
         if (fpsEl) {
             const fpsVal = Number(vision.fps || 0);
-            fpsEl.textContent = fpsVal > 0 ? fpsVal.toFixed(1) : '120.0';
+            fpsEl.textContent = fpsVal > 0 ? fpsVal.toFixed(1) : '--';
         }
 
         // HZ

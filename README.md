@@ -48,7 +48,7 @@
 | **M4 视觉前端** | ✅ 已重构并通过合成验证 | `src/pantilt/adapters/perception/vision.py` 支持 ArUco 靶标与人脸双模，输出双轴偏差 $(dx, dy)$ |
 | **M5 控制与状态机**| ✅ 已重构并通过脱机闭环 | `src/pantilt/domain/controller.py` 两轴死区控制 + 50mW 激光器安全联锁；`tests/test_2dof_loop.py` 100% PASS |
 | **M6 异构协作** | ⏳ 增强设计已冻结 | 优先打通树莓派 USB 直连微雪驱动板，ESP32 协处理器作为实时增强 |
-| **M7 交互多媒体** | ✅ 已完整实现交付 | 全功能现代化 Web 战术座舱 HUD 监视大屏（四大视口）、极坐标声纳雷达、双轴虚拟操控台、20Hz SSE 高频广播、30FPS MJPEG 视频流（实机/脱机双模），拓展坞 HDMI 与千兆网口/Wi-Fi 跨端双模访问，50/50 项全量测试 100% 通过 |
+| **M7 交互多媒体** | ✅ 已完整实现交付 | 全功能现代化 Web 战术座舱 HUD 监视大屏（四大视口）、极坐标声纳雷达、双轴虚拟操控台、默认 10 Hz SSE 遥测及 15 FPS MJPEG 视频流（实机/脱机双模），拓展坞 HDMI 与千兆网口/Wi-Fi 跨端双模访问，50/50 项全量测试 100% 通过 |
 
 ---
 
@@ -88,12 +88,13 @@ pantilt --web
 # 自定义端口启动
 python -m pantilt --web --web-port 8888
 
-# 纯终端模式（不启动 Web 界面，节省内存）
+# 仅终端操作（关闭 Web 服务与 API）
 python -m pantilt --no-web
 ```
 
 - **局域网/Wi-Fi/网线跨端访问**：在同一局域网下的任意电脑、平板或手机浏览器直接打开：
   `http://<树莓派IP>:8080` 或本地回环 `http://localhost:8080`；
+- **两台树莓派分工**。连接相机、双麦和舵机的树莓派通过 SSH 启动主程序并保留 `--web`。在显示端树莓派打开 `http://<硬件端IP>:8080/`。硬件端运行检测、控制和接口，显示端的浏览器渲染网页。独立开发界面时，可用 `GET /api/stream/video?raw=1` 取视频、`GET /api/stream/events` 订阅遥测和事件。
 - **拓展坞 HDMI 本地全屏投屏（Kiosk 模式）**：
   ```bash
   chromium-browser --kiosk --app=http://127.0.0.1:8080
@@ -106,7 +107,7 @@ python -m pantilt --no-web
 │ [TOP BAR] 🎯 视听融合智能跟踪云台 Web HUD | 状态: [FOLLOW] | 模式: [AUTO] | 118 FPS │
 ├────────────────────────────────────────┬────────────────────────────────────────┤
 │ 【视口 1】实况战术 HUD 视频视口         │ 【视口 2】空间声学极坐标雷达视口       │
-│  - 实时 30FPS OV9281 视频推流 (MJPEG)   │  - 180°/360° 极坐标声纳扫描圆盘        │
+│  - 默认 15FPS OV9281 视频推流 (MJPEG)   │  - 180°/360° 极坐标声纳扫描圆盘        │
 │  - 动态十字瞄准准星 (锁定绿 / 寻的橙)  │  - 实时 GCC-PHAT 测向波束指针与置信扇形│
 │  - 靶心引导引线与偏差矢量 (dx, dy)     │  - 左右声道立体声 VU 电平柱动态跳动     │
 │  - ArUco 工业靶标 ID / 人脸识别框      │  - 降级模式 (energy_diff) 提示牌       │
@@ -136,8 +137,8 @@ python -m pantilt --no-web
    - **运行模式平滑切换**：`AUTO`（自主视听跟踪）/ `MANUAL`（人工遥控接管）/ `CALIBRATION`（零点标定）；
    - **关键安全按键**：`[EMERGENCY CENTER]` 一键紧急归中（$(0^\circ, 0^\circ)$）、`[LASER TEST / CUTOFF]` 激光测试与紧急切断（受 10s 单调时钟物理硬保护）。
 4. **【视口 4】全系统遥测大屏与滚动终端控制台 (Telemetry & Terminal)**：
-   - **关键指标遥测卡片群**：主循环运行频率（Target: 30~50 Hz）、视觉取流帧率（Target: 90~120 FPS）、状态机当前状态徽章（`IDLE` 蓝 / `TURN_ONCE` 黄 / `FOLLOW` 绿）与驻留计时、连续锁定帧数计数器、激光累计与当前倒计时、目标脱靶丢失计时器、CPU 温度与 Uptime；
-   - **战术机甲滚动终端**：深黑背景等宽终端，实时消费 20Hz SSE 日志流，等级着色（DEBUG灰/INFO青绿/WARN橙/ERROR红），支持等级过滤与自动滚屏锁底；
+   - **关键指标遥测卡片群**：主循环运行频率（Target: 30~50 Hz）、实际检测 FPS、状态机当前状态徽章（`IDLE` 蓝 / `TURN_ONCE` 黄 / `FOLLOW` 绿）与驻留计时、连续锁定帧数计数器、激光累计与当前倒计时、目标脱靶丢失计时器、CPU 温度与 Uptime；
+   - **战术机甲滚动终端**：深黑背景等宽终端，实时消费 SSE 日志流，等级着色（DEBUG灰/INFO青绿/WARN橙/ERROR红），支持等级过滤与自动滚屏锁底；
    - **运行时参数动态热更抽屉**：支持在前端直接微调死区阈值（`deadzone_px`）、步进角度（`step_deg`）、检测模式（`aruco`/`face`），通过 `POST /api/config` 实时热更，无需重启主控进程。
 
 ### 3. 全局键盘热键与战术声效
@@ -239,7 +240,7 @@ python scripts/hw/bus_servo_probe.py --dry-run --sweep
 | **微雪总线舵机调试** | `python scripts/hw/bus_servo_probe.py` | 交互式菜单：两轴归中、水平扫掠、垂直扫掠与角度回读 |
 | **总线双轴自动扫掠** | `python scripts/hw/bus_servo_probe.py --sweep` | 连续执行 5 轮平滑往复运动，验证供电与机械限位 |
 | **WM8960 双声道录音** | `python scripts/hw/record_audio.py -d 5` | 保存 5 秒 WAV，检查左右通道独立响应与高信噪比 |
-| **OV9281 相机高帧率取流**| `python scripts/hw/camera_preview.py --seconds 10`| 实测取流平均帧率达到 90~120 FPS，全局快门无果冻 |
+| **OV9281 应用取流** | `python scripts/hw/camera_preview.py --seconds 10` | 按不同采集时间戳统计应用收到的解码画面，默认上限 30 FPS |
 | **ArUco 靶标实时识别** | `python scripts/hw/aruco_probe.py --camera` | 实时计算 12cm 靶板的中心偏差 $(dx, dy)$，时延 ≤5ms |
 | **全系统实机端到端运行** | `python -m pantilt --config configs/default.yaml` | 拍手转向 -> 视觉双轴对准 -> 激光点亮命中靶心 -> 超时回中 |
 

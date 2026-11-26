@@ -15,7 +15,7 @@ def test_bootstrap_create_app(app_config):
     assert app.audio is not None
     assert app.vision is not None
     assert app.controller is not None
-    assert app.laser is not None
+    assert not hasattr(app, "laser")  # 阶段 4 范围不再装配激光执行器
     assert app.state_machine is not None
     assert app.console is not None
     assert app.state == SystemState.IDLE
