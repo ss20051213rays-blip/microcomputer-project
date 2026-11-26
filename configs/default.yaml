@@ -1,14 +1,15 @@
 # 视听融合声源定位与目标跟踪云台 · 默认配置
 # 所有可调参数统一在此文件管理，源码中不硬编码阈值 / 限位 / 步长
-# 本配置已对齐最新采购硬件（2-DOF总线舵机、微雪驱动板、酷态科独立供电、OV9281 120fps、ArUco靶标、激光指示与WM8960）
+# 本配置已对齐当前硬件方案（2-DOF 总线舵机、微雪驱动板、酷态科独立供电、OV9281 120fps、AC3104 双麦）。
+# ArUco 靶标、50mW 激光器与 ESP32 协处理器已于 2026-11-22 移出范围，相关参数仅作历史保留，不再装配。
 
 # ── 配置元数据 ──────────────────────────────────────────────────────────────
-config_version: "0.2.0"          # 升级至 0.2.0：支持总线舵机二维平台与多模态目标跟踪
+config_version: "0.2.1"          # 0.2.1：音频参数对齐 AC3104 实测（间距 0.048 m）
 
-# ── 音频参数（M3: WM8960 硬件双麦）────────────────────────────────────────
+# ── 音频参数（M3: AC3104 双麦，TLV320AIC3104 兼容，非 WM8960）──────────────────
 audio:
-  device_name: ""                 # 留空则 sounddevice 自动选择；推荐填写 "wm8960" 或 "hw:wm8960soundcard"
-  sample_rate: 16000              # Hz，WM8960 硬件支持 16000 / 48000
+  device_name: ""                 # 留空则 sounddevice 自动选择；Pi 上声卡为 respeaker-2mic-ac3104 (hw:3,0)
+  sample_rate: 16000              # Hz，AC3104 实测支持 16000 / 44100 双声道
   channels: 2                     # 双通道，左通道 ch0，右通道 ch1
   dtype: "int16"
 
@@ -21,9 +22,13 @@ audio:
   pre_roll_ms: 50                 # 触发前预滚窗口（ms），用于 GCC-PHAT 捕获起始
 
   # GCC-PHAT 定位
-  mic_spacing_m: 0.065            # WM8960 板载双麦物理间距约 0.065 m (65mm)
+  # ── 实机标定（2026-11-26）──────────────────────────────────────────────
+  # 板标称间距 65 mm，但 11-22 由 ±90° 实测时延 137 μs 反推有效声学间距为 0.047~0.050 m；
+  # 11-26 唤醒测向以 0.048 m 实测：左 45° 三次 -46.3~-50.6°，正前 -1.4°/+0.7°，侧别 7/7 正确。
+  # 若沿用 0.065 会使角度系统性偏大约 30%。正式角度标定补样后再微调。
+  mic_spacing_m: 0.048
   sound_speed_mps: 343.0          # 声速（m/s）
-  audio_zero_deg: 0.0             # 声学零点偏置（°），实测后修正
+  audio_zero_deg: 0.0             # 声学零点偏置（°）：11-26 正前两次均值 -0.39°，暂保持 0，补样后修正
   gcc_confidence_threshold: 0.3   # 低于此值切换能量差降级模式
   fallback_angle_deg: 30.0        # 侧别降级时的固定转角（°）
 
@@ -44,7 +49,7 @@ camera:
   # 阶段 4 锁定纯人脸跟踪；ArUco 属于已移出范围的旧方案
   target_mode: "face"
 
-  # ArUco 工业靶标参数 (12cm 5mm 哑光雪弗板 UV 打印)
+  # 已移出范围（2026-11-22）：保留参数仅为兼容旧配置，target_mode 固定为 "face"，勿切回 aruco
   aruco:
     dictionary: "DICT_4X4_50"     # 对应采购的 4x4 50 字典
     target_ids: [10, 11, 12, 13, 14, 15, 16, 17] # 采购的标志板 ID 组
@@ -118,9 +123,10 @@ servo:
   step_deg: 2.0
   deadzone_px: 30
 
-# ── 激光指示器参数（物理瞄准指示）────────────────────────────────────────
+# ── 激光指示器参数（已移出范围，2026-11-22）───────────────────────────────
+# 激光执行器不再装配（bootstrap 不创建 LaserIndicator）；保留段落仅为兼容旧配置与 Web 遥测字段。
 laser:
-  enabled: true                   # 是否启用 50mW 小型激光瞄准指示
+  enabled: false                  # 保持 false；主程序已不读取激光依赖
   control_mode: "gpio"            # "gpio"（通过树莓派/MOSFET 引脚） | "esp32"（通过 ESP32 协处理器串口指令）
   gpio_pin: 23                    # 树莓派控制引脚 (BCM 23)
   lock_min_frames: 3              # 连续稳定在死区中心多少帧才点亮激光
@@ -146,16 +152,16 @@ control:
   recovery_pitch_deg: 12.0        # 沿出画方向最多补扫的俯仰角（°）
   main_loop_hz: 30                # 主循环和跟踪舵机下发频率（Hz）
 
-# ── 音响与语音播报参数（M7 拓展）─────────────────────────────────────────
+# ── 音箱回应参数（阶段 3：唤醒后播放「我在」）─────────────────────────────
 speaker:
-  enabled: false                  # M7 尚未实现；模块落地并完成验证后再启用
-  audio_file: "assets/audio/locked.wav" # 视觉锁定提示音路径
-  lock_min_frames: 2              # 连续稳定检测到人脸多少帧视为稳定锁定并触发播报
+  enabled: false                  # 回应目前由 scripts/hw/kws_probe.py --reply-wav 实现；接入主程序后启用
+  audio_file: "assets/audio/wakeup_reply.wav" # 16 kHz / 16 bit 双声道，经 AC3104 SPK 输出
+  lock_min_frames: 2              # 预留：连续稳定检测到人脸多少帧视为稳定锁定
 
-# ── 屏幕显示与实况 HUD 参数（M7 拓展）──────────────────────────────────────
+# ── 屏幕显示参数（桌面预览由 scripts/hw/camera_preview.py --desktop 提供）────
 display:
-  enabled: false                  # M7 尚未实现；模块落地并完成验证后再启用
-  window_name: "Pan-Tilt Visual Tracking (OV9281 120fps)"
+  enabled: false                  # 主程序默认无头运行；需要本地预览时用探针脚本的 --desktop
+  window_name: "Pan-Tilt Live Camera"
   show_hud: true                  # 是否在图像上绘制锁定框、十字准星与状态文字
   window_width: 640               # 显示窗口宽度
   window_height: 480              # 显示窗口高度

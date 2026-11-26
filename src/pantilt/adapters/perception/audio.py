@@ -40,8 +40,9 @@ class AudioPipeline:
         self.energy_threshold = self.config.get("energy_threshold", 0.05)
         self.min_event_gap = self.config.get("min_event_gap_ms", 300) / 1000.0
         
-        # GCC-PHAT 定位参数
-        self.mic_spacing = self.config.get("mic_spacing_m", 0.065)
+        # GCC-PHAT 定位参数（默认间距 0.048 m：AC3104 双麦板标称 65 mm，
+        # 由 ±90° 实测时延 137 μs 反推有效声学间距 0.047~0.050 m，2026-11-26 实测）
+        self.mic_spacing = self.config.get("mic_spacing_m", 0.048)
         self.sound_speed = self.config.get("sound_speed_mps", 343.0)
         self.audio_zero = self.config.get("audio_zero_deg", 0.0)
         self.gcc_conf_thresh = self.config.get("gcc_confidence_threshold", 0.3)
