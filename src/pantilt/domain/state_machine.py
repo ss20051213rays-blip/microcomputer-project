@@ -25,8 +25,7 @@ class StateMachineResult:
 class TrackerStateMachine:
     """IDLE → TURN_AND_RESPOND → SEARCH_FACE → TRACK_FACE 四态流程。
 
-    音频事件在此仅作为触发与粗测向输入；KWS、环形缓存及音箱播放仍由
-    阶段 3 实现，本状态机不依赖其具体实现。
+    音频事件在此仅作为触发与粗测向输入；唤醒词、双麦缓冲和回应播放由音频适配器负责。
     """
 
     _SWEEP_PATTERN = (0.0, 10.0, 20.0, 10.0, 0.0, -10.0, -20.0, -10.0, 0.0)

@@ -29,7 +29,9 @@ def create_app(
     """
     cfg_ctrl = config.get("control", {})
     cfg_servo = config.get("servo", {})
-    cfg_audio = config.get("audio", {})
+    cfg_audio = dict(config.get("audio", {}))
+    cfg_audio["wakeup"] = config.get("wakeup", {})
+    cfg_audio["speaker"] = config.get("speaker", {})
     cfg_camera = config.get("camera", {})
     cfg_web = dict(config.get("web", {}))
 

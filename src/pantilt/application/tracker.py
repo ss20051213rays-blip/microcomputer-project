@@ -167,6 +167,10 @@ class PanTiltTrackerApp:
             )
 
         # 2. 采样输入
+        if self.audio.wakeup_active:
+            self.audio.set_wakeup_listening(
+                self.state == SystemState.IDLE and self.control_mode == "AUTO"
+            )
         audio_ev = self.audio.get_latest_event(block=False)
         if audio_ev:
             self.last_audio_event = audio_ev
@@ -189,6 +193,10 @@ class PanTiltTrackerApp:
             current_pitch=self.servo.current_pitch,
             controller=self.controller,
         )
+        if self.audio.wakeup_active:
+            self.audio.set_wakeup_listening(
+                res.state == SystemState.IDLE and self.control_mode == "AUTO"
+            )
 
         self.vision.set_tracking_active(res.state != SystemState.IDLE)
 

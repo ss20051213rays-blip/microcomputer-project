@@ -4,7 +4,7 @@
 # ArUco 靶标、50mW 激光器与 ESP32 协处理器已于 2026-11-22 移出范围，相关参数仅作历史保留，不再装配。
 
 # ── 配置元数据 ──────────────────────────────────────────────────────────────
-config_version: "0.2.1"          # 0.2.1：音频参数对齐 AC3104 实测（间距 0.048 m）
+config_version: "0.3.0"          # 0.3.0：主程序接入离线唤醒、双麦测向与回应
 
 # ── 音频参数（M3: AC3104 双麦，TLV320AIC3104 兼容，非 WM8960）──────────────────
 audio:
@@ -152,11 +152,25 @@ control:
   recovery_pitch_deg: 12.0        # 沿出画方向最多补扫的俯仰角（°）
   main_loop_hz: 30                # 主循环和跟踪舵机下发频率（Hz）
 
-# ── 音箱回应参数（阶段 3：唤醒后播放「我在」）─────────────────────────────
+# ── 离线唤醒词（Pi 上使用 sherpa-onnx，资源位于项目外）─────────────────────
+wakeup:
+  enabled: true
+  model_dir: "~/.local/share/pantilt-kws/models/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01"
+  keywords_file: "configs/kws_wenetspeech.txt"
+  threshold: 0.15
+  score: 1.5
+  input_gain: 4.0
+  num_threads: 1
+  max_active_paths: 4
+  provider: "cpu"
+
+# ── 音箱回应参数（唤醒后播放「我在」）──────────────────────────────────────
 speaker:
-  enabled: false                  # 回应目前由 scripts/hw/kws_probe.py --reply-wav 实现；接入主程序后启用
+  enabled: true
   audio_file: "assets/audio/wakeup_reply.wav" # 16 kHz / 16 bit 双声道，经 AC3104 SPK 输出
-  lock_min_frames: 2              # 预留：连续稳定检测到人脸多少帧视为稳定锁定
+  device: "hw:CARD=respeaker2micac,DEV=0"
+  reply_cooldown_s: 0.5
+  lock_min_frames: 2              # 旧配置字段保留，当前回应由唤醒事件触发
 
 # ── 屏幕显示参数（桌面预览由 scripts/hw/camera_preview.py --desktop 提供）────
 display:

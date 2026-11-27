@@ -5,7 +5,21 @@ from pantilt.bootstrap import create_app
 from pantilt.domain.types import AudioEvent, SystemState, VisionObservation
 
 
-def _start_search(app):
+def test_wakeup_listening_pauses_when_wakeup_triggers_turn(running_app):
+    running_app.audio.wakeup_active = True
+    now = time.monotonic()
+
+    running_app.tick(now)
+    assert running_app.audio.wakeup_listening is True
+
+    running_app.audio.event_queue.put(AudioEvent(now + 0.01, -20.0, "left", 0.9, "gcc_phat"))
+    running_app.tick(now + 0.01)
+
+    assert running_app.state == SystemState.TURN_AND_RESPOND
+    assert running_app.audio.wakeup_listening is False
+
+
+ def _start_search(app):
     now = time.monotonic()
     app.audio.event_queue.put(AudioEvent(now, -20.0, "left", 0.9, "test"))
     app.tick(now)
